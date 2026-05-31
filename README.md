@@ -128,11 +128,14 @@ Keys:
 | `q` / `Ctrl+C` | quit                                           |
 
 `n` and `d` run the same `wt new` / `wt rm` underneath, so **hooks run and their
-output is shown live** while the action runs; the screen then returns to the
-list. Each action's combined output is tee'd to a temporary `wt-action-*.log`:
-the path is printed at the top of the action's output (`wt: logging this action
-to …`) and is shown in the status line afterward — `done — log: …` on success,
-`action failed: … — see …` on failure — so you can always find it.
+output is shown live** while the action runs. When the action finishes, the
+output stays on screen with a `Press Enter to return to the list…` prompt — so
+you can read it — and pressing Enter returns to the (refreshed) list. Each
+action's combined output is also tee'd to a temporary `wt-action-*.log`: the
+path is printed at the top of the action's output (`wt: logging this action
+to …`), repeated when it completes, and shown in the status line afterward —
+`done — log: …` on success, `action failed: … — see …` on failure — so you can
+always find it.
 
 > The TUI only opens when stdout is a real terminal; piped/non-interactive
 > invocation prints help instead.
