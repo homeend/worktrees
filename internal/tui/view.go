@@ -2,14 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	titleStyle    = lipgloss.NewStyle().Bold(true)
-	selectedStyle = lipgloss.NewStyle().Bold(true).Underline(true)
 )
 
 func (m model) View() string {
@@ -30,6 +26,29 @@ func (m model) View() string {
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString("\n↑/↓ move • q quit\n")
+	b.WriteString("\n")
+
+	switch m.mode {
+	case modeConfirmDelete:
+		if it, ok := m.current(); ok {
+			b.WriteString(promptStyle.Render(fmt.Sprintf("Delete %s? (y/n)", filepath.Base(it.Path))) + "\n")
+		}
+	case modeNewInput:
+		b.WriteString(promptStyle.Render("New worktree name (empty = auto): ") + m.input + "▌\n")
+		b.WriteString("enter create • esc cancel\n")
+	default:
+		b.WriteString("↑/↓ move • n new • d delete • q quit\n")
+	}
+
+	if m.status != "" {
+		b.WriteString("\n" + statusStyle.Render(m.status) + "\n")
+	}
 	return b.String()
 }
+
+var (
+	titleStyle    = lipgloss.NewStyle().Bold(true)
+	selectedStyle = lipgloss.NewStyle().Bold(true).Underline(true)
+	promptStyle   = lipgloss.NewStyle().Bold(true)
+	statusStyle   = lipgloss.NewStyle().Faint(true)
+)

@@ -12,7 +12,7 @@ func Run(m *worktree.Manager, dir string) error {
 	if err != nil {
 		return err
 	}
-	p := tea.NewProgram(newModel(items))
+	p := tea.NewProgram(newModel(m, dir, items))
 	_, err = p.Run()
 	return err
 }
