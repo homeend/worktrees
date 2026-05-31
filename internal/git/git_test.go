@@ -59,3 +59,22 @@ func TestParsePorcelainZ_Empty(t *testing.T) {
 		t.Errorf("want 0 worktrees, got %d", len(got))
 	}
 }
+
+func TestVersionLess(t *testing.T) {
+	cases := []struct {
+		v        Version
+		maj, min int
+		wantLess bool
+	}{
+		{Version{2, 30, 0}, 2, 30, false},
+		{Version{2, 29, 9}, 2, 30, true},
+		{Version{1, 99, 0}, 2, 30, true},
+		{Version{3, 0, 0}, 2, 30, false},
+		{Version{2, 31, 0}, 2, 30, false},
+	}
+	for _, c := range cases {
+		if got := versionLess(c.v, c.maj, c.min); got != c.wantLess {
+			t.Errorf("versionLess(%+v, %d, %d) = %v, want %v", c.v, c.maj, c.min, got, c.wantLess)
+		}
+	}
+}
