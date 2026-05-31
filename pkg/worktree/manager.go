@@ -176,3 +176,68 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 	}
 	return WorktreeInfo{}, fmt.Errorf("no worktree matching %q", name)
 }
+
+// Remove tears down a worktree: pre-remove hook -> git worktree remove ->
+// branch delete (safe unless ForceBranch) -> post-remove hook. A safe-delete
+// refusal (unmerged branch) is not fatal: the worktree is still removed and the
+// result reports BranchKept so the CLI can tell the user.
+func (m *Manager) Remove(dir string, opts RemoveOptions) (RemoveResult, error) {
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	w, err := m.resolveWorktree(dir, opts.Name)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	branch := strings.TrimPrefix(w.Branch, "refs/heads/")
+	res := RemoveResult{Name: opts.Name, Branch: branch, Path: w.Path}
+
+	hc := HookContext{
+		SourceRoot: repoRoot,
+		TargetRoot: w.Path,
+		Name:       opts.Name,
+		Branch:     branch,
+		Container:  m.containerPath(repoRoot),
+		RepoName:   filepath.Base(repoRoot),
+	}
+
+	if !opts.NoHooks {
+		pr := hc
+		pr.Event = PreRemove
+		pr.Cwd = w.Path
+		if err := m.hooks.Run(pr); err != nil {
+			return res, fmt.Errorf("pre-remove hook failed (nothing removed): %w", err)
+		}
+	}
+
+	if err := m.git.RemoveWorktree(repoRoot, w.Path, opts.Force); err != nil {
+		return res, fmt.Errorf("git worktree remove: %w", err)
+	}
+
+	if !opts.KeepBranch && branch != "" {
+		deleted, err := m.git.DeleteBranch(repoRoot, branch, opts.ForceBranch)
+		if err != nil {
+			return res, fmt.Errorf("delete branch %q: %w", branch, err)
+		}
+		res.BranchDeleted = deleted
+		res.BranchKept = !deleted
+	}
+
+	if !opts.NoHooks {
+		por := hc
+		por.Event = PostRemove
+		por.Cwd = repoRoot
+		if err := m.hooks.Run(por); err != nil {
+			return res, fmt.Errorf("post-remove hook failed (worktree already removed): %w", err)
+		}
+	}
+
+	return res, nil
+}
+
+// Find resolves a user-supplied name to a worktree (by dir basename or branch),
+// refusing the main worktree. Exposed for callers like `wt path`.
+func (m *Manager) Find(dir, name string) (WorktreeInfo, error) {
+	return m.resolveWorktree(dir, name)
+}

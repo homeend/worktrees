@@ -187,3 +187,63 @@ func TestResolveWorktree_RefusesMain(t *testing.T) {
 		t.Error("resolving the main worktree for removal should be refused")
 	}
 }
+
+func seedRemovable(g *fakeGit) {
+	g.worktrees = []GitWorktree{
+		{Path: "/home/me/myrepo", Branch: "refs/heads/main"},
+		{Path: "/home/me/myrepo.worktrees/feat", Branch: "refs/heads/wt/feat"},
+	}
+}
+
+func TestRemove_RunsHooksRemovesWorktreeAndBranch(t *testing.T) {
+	m, g, h := newTestManager("/home/me/myrepo")
+	seedRemovable(g)
+	res, err := m.Remove(".", RemoveOptions{Name: "feat"})
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if len(g.removedPaths) != 1 {
+		t.Errorf("worktree not removed: %v", g.removedPaths)
+	}
+	if !res.BranchDeleted {
+		t.Errorf("branch should be deleted; res=%+v", res)
+	}
+	wantOrder := []HookEvent{PreRemove, PostRemove}
+	if len(h.calls) != 2 || h.calls[0] != wantOrder[0] || h.calls[1] != wantOrder[1] {
+		t.Errorf("hook order = %v, want %v", h.calls, wantOrder)
+	}
+}
+
+func TestRemove_KeepBranchSkipsDeletion(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	seedRemovable(g)
+	res, err := m.Remove(".", RemoveOptions{Name: "feat", KeepBranch: true})
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if len(g.deleted) != 0 {
+		t.Errorf("branch should not be deleted: %v", g.deleted)
+	}
+	if res.BranchDeleted {
+		t.Error("BranchDeleted should be false with KeepBranch")
+	}
+}
+
+func TestRemove_UnmergedBranchKeptAndReported(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	seedRemovable(g)
+	g.deleteOK = false
+	res, err := m.Remove(".", RemoveOptions{Name: "feat"})
+	if err != nil {
+		t.Fatalf("Remove should succeed even if branch kept: %v", err)
+	}
+	if res.BranchDeleted {
+		t.Error("branch should not be reported deleted")
+	}
+	if !res.BranchKept {
+		t.Error("BranchKept should be true so the CLI can report it")
+	}
+	if len(g.removedPaths) != 1 {
+		t.Error("worktree should still be removed")
+	}
+}
