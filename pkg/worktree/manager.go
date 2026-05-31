@@ -78,7 +78,10 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 		return AddResult{}, fmt.Errorf("resolve repo root: %w", err)
 	}
 
-	name, branch := m.resolveNames(opts)
+	name, branch, err := m.resolveNames(opts)
+	if err != nil {
+		return AddResult{}, err
+	}
 	if err := m.git.CheckRefFormat(branch); err != nil {
 		return AddResult{}, fmt.Errorf("invalid branch name %q: %w", branch, err)
 	}
@@ -133,8 +136,10 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	return AddResult{Name: name, Branch: branch, Path: target, BaseRef: baseRef}, nil
 }
 
-// List returns worktrees for the repo containing dir. The main working tree is
-// flagged IsMain.
+// List returns the worktrees wt manages: the main working tree (flagged IsMain)
+// plus any worktree living inside this repo's container. Linked worktrees git
+// knows about but that live elsewhere are omitted, since wt only manages the
+// container.
 func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
 	repoRoot, err := m.git.MainRoot(dir)
 	if err != nil {
@@ -144,14 +149,21 @@ func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	container := m.containerPath(repoRoot)
 	out := make([]WorktreeInfo, 0, len(raw))
 	for _, w := range raw {
+		isMain := w.Path == repoRoot
+		inContainer := w.Path == container ||
+			strings.HasPrefix(w.Path, container+string(filepath.Separator))
+		if !isMain && !inContainer {
+			continue
+		}
 		out = append(out, WorktreeInfo{
 			Path:     w.Path,
 			Branch:   w.Branch,
 			HEAD:     w.HEAD,
 			Detached: w.Detached,
-			IsMain:   w.Path == repoRoot,
+			IsMain:   isMain,
 		})
 	}
 	return out, nil

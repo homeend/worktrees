@@ -28,6 +28,8 @@ func classify(err error) error {
 		return fmt.Errorf("%w: %v", ErrHookFailed, err)
 	case strings.Contains(msg, "uncommitted") || strings.Contains(msg, "contains modified or untracked"):
 		return fmt.Errorf("%w: %v", ErrDirtyWorktree, err)
+	case strings.Contains(msg, "already exists"):
+		return fmt.Errorf("%w: %v", ErrNameCollision, err)
 	}
 	return err
 }

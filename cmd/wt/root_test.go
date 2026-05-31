@@ -41,6 +41,10 @@ func TestClassify_MapsKnownSignatures(t *testing.T) {
 	if exitCodeFor(plain) != 1 {
 		t.Errorf("unknown error should map to exit 1, got %d", exitCodeFor(plain))
 	}
+	collision := classify(errInjectedErr("branch \"wt/feat\" already exists; pass a different --branch"))
+	if exitCodeFor(collision) != 3 {
+		t.Errorf("name collision should map to exit 3, got %d", exitCodeFor(collision))
+	}
 	if classify(nil) != nil {
 		t.Error("classify(nil) must be nil")
 	}

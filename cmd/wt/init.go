@@ -53,7 +53,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Scaffold .worktrees/ with config and hook stubs",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd, err := os.Getwd()
+		cwd, err := workdir()
 		if err != nil {
 			return err
 		}
