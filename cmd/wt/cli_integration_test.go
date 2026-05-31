@@ -42,3 +42,21 @@ func TestNewCommand_CreatesWorktree(t *testing.T) {
 		t.Errorf("worktree not created: %v", err)
 	}
 }
+
+func TestRmCommand_RemovesWorktreeAndReportsBranch(t *testing.T) {
+	repo := newRepoForCLI(t)
+	m, err := buildManager(repo)
+	if err != nil {
+		t.Fatalf("buildManager: %v", err)
+	}
+	if _, err := m.Add(repo, worktreeAddOptions("feat", "", "", true)); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	res, err := m.Remove(repo, worktreeRemoveOptions("feat", false, false, false, true))
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if !res.BranchDeleted {
+		t.Errorf("merged branch should be deleted: %+v", res)
+	}
+}
