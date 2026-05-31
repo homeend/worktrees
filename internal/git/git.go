@@ -46,9 +46,15 @@ func (r *Runner) Version() (Version, error) {
 	if err != nil {
 		return Version{}, err
 	}
-	fields := strings.Fields(string(out))
+	return parseVersion(string(out))
+}
+
+// parseVersion parses the output of `git --version`, e.g.
+// "git version 2.43.0" or "git version 2.43.0.windows.1".
+func parseVersion(s string) (Version, error) {
+	fields := strings.Fields(s)
 	if len(fields) < 3 {
-		return Version{}, fmt.Errorf("cannot parse git version: %q", out)
+		return Version{}, fmt.Errorf("cannot parse git version: %q", s)
 	}
 	parts := strings.SplitN(fields[2], ".", 3)
 	v := Version{}

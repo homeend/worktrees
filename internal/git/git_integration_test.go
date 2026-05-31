@@ -138,9 +138,15 @@ func TestBranch_ExistsAndDelete(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "x.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r.Run(repo, "add", ".")
-	r.Run(repo, "commit", "-m", "wip")
-	r.Run(repo, "checkout", "main")
+	if _, err := r.Run(repo, "add", "."); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if _, err := r.Run(repo, "commit", "-m", "wip"); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if _, err := r.Run(repo, "checkout", "main"); err != nil {
+		t.Fatalf("checkout main: %v", err)
+	}
 	deleted, err = r.DeleteBranch(repo, "wt/unmerged", false)
 	if err != nil {
 		t.Fatalf("safe delete of unmerged branch should not error, got %v", err)

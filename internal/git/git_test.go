@@ -78,3 +78,29 @@ func TestVersionLess(t *testing.T) {
 		}
 	}
 }
+
+func TestParseVersion(t *testing.T) {
+	cases := []struct {
+		in   string
+		want Version
+		ok   bool
+	}{
+		{"git version 2.43.0", Version{2, 43, 0}, true},
+		{"git version 2.43.0.windows.1", Version{2, 43, 0}, true},
+		{"git version 2.39.3 (Apple Git-145)", Version{2, 39, 3}, true},
+		{"git version 2.30", Version{2, 30, 0}, true},
+		{"garbage", Version{}, false},
+	}
+	for _, c := range cases {
+		got, err := parseVersion(c.in)
+		if c.ok && err != nil {
+			t.Errorf("parseVersion(%q) unexpected error: %v", c.in, err)
+		}
+		if !c.ok && err == nil {
+			t.Errorf("parseVersion(%q) expected error, got none", c.in)
+		}
+		if c.ok && got != c.want {
+			t.Errorf("parseVersion(%q) = %+v, want %+v", c.in, got, c.want)
+		}
+	}
+}
