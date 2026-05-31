@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -73,6 +74,11 @@ func (l *loggedExec) SetStdout(w io.Writer) { l.cmd.Stdout = w }
 func (l *loggedExec) SetStderr(w io.Writer) { l.cmd.Stderr = w }
 
 func (l *loggedExec) Run() error {
+	// Capture the terminal input for the post-run pause before tee'ing wraps the
+	// streams (which only touch stdout/stderr).
+	in := l.cmd.Stdin
+	out := l.cmd.Stdout
+
 	if l.log != nil {
 		// Default stderr to stdout if the runtime left it unset.
 		if l.cmd.Stderr == nil {
@@ -88,7 +94,28 @@ func (l *loggedExec) Run() error {
 			fmt.Fprintf(l.cmd.Stdout, "wt: logging this action to %s\n\n", l.logPath)
 		}
 	}
-	return l.cmd.Run()
+
+	runErr := l.cmd.Run()
+
+	// Keep the action's output on screen until the user acknowledges, so it
+	// isn't lost when the TUI repaints. The result line goes only to the
+	// terminal (not the log).
+	if out != nil {
+		if runErr != nil {
+			fmt.Fprintf(out, "\nwt: action failed: %v\n", runErr)
+		} else {
+			fmt.Fprintf(out, "\nwt: done.\n")
+		}
+		if l.logPath != "" {
+			fmt.Fprintf(out, "wt: log saved to %s\n", l.logPath)
+		}
+		fmt.Fprint(out, "\nPress Enter to return to the list…")
+		if in != nil {
+			bufio.NewReader(in).ReadString('\n')
+		}
+	}
+
+	return runErr
 }
 
 // defaultRunAction re-invokes this binary as `wt <args>` via tea.Exec, which
