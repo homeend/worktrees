@@ -110,6 +110,34 @@ Then `wtcd my-feature` jumps straight into the worktree.
 
 ---
 
+## Interactive TUI
+
+Run `wt` with no arguments in a terminal to open the interactive list:
+
+```sh
+wt
+```
+
+Keys:
+
+| Key       | Action                                              |
+|-----------|-----------------------------------------------------|
+| `↑`/`↓` (or `k`/`j`) | move the cursor                          |
+| `n`       | create a new worktree (auto-generated name)         |
+| `d`       | delete the selected worktree (asks `y`/`n` to confirm; the main worktree is refused) |
+| `q` / `Ctrl+C` | quit                                           |
+
+`n` and `d` run the same `wt new` / `wt rm` underneath, so **hooks run and their
+output is shown live** while the action runs; the screen then returns to the
+list. Each action's combined output is also saved to a temporary
+`wt-action-*.log`, and if an action fails the log path is shown in the status
+line so you can inspect it.
+
+> The TUI only opens when stdout is a real terminal; piped/non-interactive
+> invocation prints help instead.
+
+---
+
 ## Commands
 
 ```
