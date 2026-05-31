@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -10,7 +9,6 @@ import (
 )
 
 var (
-	newRepo    string
 	newBranch  string
 	newBase    string
 	newNoHooks bool
@@ -26,14 +24,7 @@ var newCmd = &cobra.Command{
 	Short: "Create a new worktree",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd := newRepo
-		if cwd == "" {
-			var err error
-			if cwd, err = os.Getwd(); err != nil {
-				return err
-			}
-		}
-		m, err := buildManager(cwd)
+		m, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}
@@ -51,7 +42,6 @@ var newCmd = &cobra.Command{
 }
 
 func init() {
-	newCmd.Flags().StringVarP(&newRepo, "repo", "r", "", "source repo (default: current dir)")
 	newCmd.Flags().StringVarP(&newBranch, "branch", "b", "", "branch name (default: derived from name)")
 	newCmd.Flags().StringVar(&newBase, "base", "", "base ref to branch from (default: config base_ref / HEAD)")
 	newCmd.Flags().BoolVar(&newNoHooks, "no-hooks", false, "skip lifecycle hooks")

@@ -37,11 +37,7 @@ var listCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Short:   "List worktrees",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		m, err := buildManager(cwd)
+		m, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -28,11 +27,7 @@ var rmCmd = &cobra.Command{
 	Short: "Remove a worktree and its branch",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		m, err := buildManager(cwd)
+		m, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}

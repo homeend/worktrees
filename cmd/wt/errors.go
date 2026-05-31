@@ -1,6 +1,10 @@
 package cmd
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // Sentinel errors mapped to stable process exit codes.
 var (
@@ -9,6 +13,24 @@ var (
 	ErrHookFailed    = errors.New("hook failed")
 	ErrDirtyWorktree = errors.New("worktree has uncommitted changes")
 )
+
+// classify inspects an error's message for known failure signatures and wraps it
+// with the matching sentinel so exitCodeFor can map it to a stable exit code.
+// pkg/worktree returns descriptive wrapped errors (not sentinels), so the CLI
+// boundary translates them here.
+func classify(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "hook failed"), strings.Contains(msg, "hook exited"):
+		return fmt.Errorf("%w: %v", ErrHookFailed, err)
+	case strings.Contains(msg, "uncommitted") || strings.Contains(msg, "contains modified or untracked"):
+		return fmt.Errorf("%w: %v", ErrDirtyWorktree, err)
+	}
+	return err
+}
 
 // exitCodeFor maps an error to a process exit code. Unknown non-nil errors -> 1.
 func exitCodeFor(err error) int {

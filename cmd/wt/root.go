@@ -19,9 +19,38 @@ var rootCmd = &cobra.Command{
 	Short: "Fast git worktree management with lifecycle hooks",
 }
 
+var repoFlag string
+
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&repoFlag, "repo", "r", "", "source repo (default: current dir)")
+}
+
+// workdir returns the directory wt should operate from: the --repo flag if set,
+// otherwise the current working directory.
+func workdir() (string, error) {
+	if repoFlag != "" {
+		return repoFlag, nil
+	}
+	return os.Getwd()
+}
+
+// managerForWorkdir resolves the workdir and builds a Manager for it.
+func managerForWorkdir() (*worktree.Manager, string, error) {
+	cwd, err := workdir()
+	if err != nil {
+		return nil, "", err
+	}
+	m, err := buildManager(cwd)
+	if err != nil {
+		return nil, "", err
+	}
+	return m, cwd, nil
+}
+
 // Execute runs the root command and returns a process exit code.
 func Execute() int {
 	if err := rootCmd.Execute(); err != nil {
+		err = classify(err)
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return exitCodeFor(err)
 	}

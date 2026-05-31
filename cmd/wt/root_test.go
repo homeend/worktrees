@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,26 @@ func TestExitCodeFor(t *testing.T) {
 		}
 	}
 }
+
+func TestClassify_MapsKnownSignatures(t *testing.T) {
+	hook := classify(errInjectedErr("post-create hook failed (worktree left in place): boom"))
+	if exitCodeFor(hook) != 4 {
+		t.Errorf("hook failure should map to exit 4, got %d", exitCodeFor(hook))
+	}
+	dirty := classify(errInjectedErr("git worktree remove: fatal: contains modified or untracked files"))
+	if exitCodeFor(dirty) != 5 {
+		t.Errorf("dirty worktree should map to exit 5, got %d", exitCodeFor(dirty))
+	}
+	plain := classify(errInjectedErr("some other error"))
+	if exitCodeFor(plain) != 1 {
+		t.Errorf("unknown error should map to exit 1, got %d", exitCodeFor(plain))
+	}
+	if classify(nil) != nil {
+		t.Error("classify(nil) must be nil")
+	}
+}
+
+func errInjectedErr(s string) error { return fmt.Errorf("%s", s) }
 
 func TestListJSON_Marshals(t *testing.T) {
 	items := []worktree.WorktreeInfo{
