@@ -112,3 +112,43 @@ func TestWorktree_AddListRemovePrune(t *testing.T) {
 		t.Fatalf("Prune: %v", err)
 	}
 }
+
+func TestBranch_ExistsAndDelete(t *testing.T) {
+	r := New()
+	repo := newTestRepo(t)
+	if _, err := r.Run(repo, "branch", "wt/merged"); err != nil {
+		t.Fatalf("setup branch: %v", err)
+	}
+	if !r.BranchExists(repo, "wt/merged") {
+		t.Fatal("BranchExists should be true for created branch")
+	}
+	if r.BranchExists(repo, "wt/missing") {
+		t.Fatal("BranchExists should be false for missing branch")
+	}
+	deleted, err := r.DeleteBranch(repo, "wt/merged", false)
+	if err != nil {
+		t.Fatalf("safe delete of merged branch failed: %v", err)
+	}
+	if !deleted {
+		t.Fatal("merged branch should have been deleted")
+	}
+	if _, err := r.Run(repo, "checkout", "-b", "wt/unmerged"); err != nil {
+		t.Fatalf("checkout -b: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "x.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r.Run(repo, "add", ".")
+	r.Run(repo, "commit", "-m", "wip")
+	r.Run(repo, "checkout", "main")
+	deleted, err = r.DeleteBranch(repo, "wt/unmerged", false)
+	if err != nil {
+		t.Fatalf("safe delete of unmerged branch should not error, got %v", err)
+	}
+	if deleted {
+		t.Fatal("safe delete should report unmerged branch as not deleted (false)")
+	}
+	if _, err := r.DeleteBranch(repo, "wt/unmerged", true); err != nil {
+		t.Fatalf("force delete failed: %v", err)
+	}
+}
