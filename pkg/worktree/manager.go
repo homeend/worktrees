@@ -130,3 +130,49 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 
 	return AddResult{Name: name, Branch: branch, Path: target, BaseRef: baseRef}, nil
 }
+
+// List returns worktrees for the repo containing dir. The main working tree is
+// flagged IsMain.
+func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := m.git.ListWorktrees(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]WorktreeInfo, 0, len(raw))
+	for _, w := range raw {
+		out = append(out, WorktreeInfo{
+			Path:     w.Path,
+			Branch:   w.Branch,
+			HEAD:     w.HEAD,
+			Detached: w.Detached,
+			IsMain:   w.Path == repoRoot,
+		})
+	}
+	return out, nil
+}
+
+// resolveWorktree maps a user-supplied name to a worktree, matching by
+// directory basename first, then branch (with/without wt/ prefix). It refuses
+// the main worktree and errors on not-found.
+func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
+	list, err := m.List(dir)
+	if err != nil {
+		return WorktreeInfo{}, err
+	}
+	wantBranch := "refs/heads/wt/" + strings.TrimPrefix(name, "wt/")
+	for _, w := range list {
+		byDir := filepath.Base(w.Path) == naming.SanitizeDir(name)
+		byBranch := w.Branch == wantBranch || w.Branch == "refs/heads/"+name
+		if byDir || byBranch {
+			if w.IsMain {
+				return WorktreeInfo{}, fmt.Errorf("%q is the main worktree and cannot be removed", name)
+			}
+			return w, nil
+		}
+	}
+	return WorktreeInfo{}, fmt.Errorf("no worktree matching %q", name)
+}

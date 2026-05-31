@@ -137,3 +137,53 @@ func TestAdd_NoHooksSkipsHooks(t *testing.T) {
 		t.Errorf("hooks should be skipped, got %v", h.calls)
 	}
 }
+
+func TestList_MapsGitWorktrees(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	g.worktrees = []GitWorktree{
+		{Path: "/home/me/myrepo", Branch: "refs/heads/main"},
+		{Path: "/home/me/myrepo.worktrees/feat", Branch: "refs/heads/wt/feat"},
+	}
+	list, err := m.List(".")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("want 2, got %d", len(list))
+	}
+	if !list[0].IsMain {
+		t.Errorf("first entry (repo root) should be marked main")
+	}
+	if list[1].Branch != "refs/heads/wt/feat" {
+		t.Errorf("branch passthrough wrong: %q", list[1].Branch)
+	}
+}
+
+func TestResolveWorktree_ByDirThenBranch(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	g.worktrees = []GitWorktree{
+		{Path: "/home/me/myrepo", Branch: "refs/heads/main"},
+		{Path: "/home/me/myrepo.worktrees/feat", Branch: "refs/heads/wt/feat"},
+	}
+	w, err := m.resolveWorktree(".", "feat")
+	if err != nil {
+		t.Fatalf("resolve by dir: %v", err)
+	}
+	if w.Path != "/home/me/myrepo.worktrees/feat" {
+		t.Errorf("resolved wrong path: %q", w.Path)
+	}
+	if _, err := m.resolveWorktree(".", "wt/feat"); err != nil {
+		t.Errorf("resolve by branch failed: %v", err)
+	}
+	if _, err := m.resolveWorktree(".", "missing"); err == nil {
+		t.Error("expected not-found error")
+	}
+}
+
+func TestResolveWorktree_RefusesMain(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	g.worktrees = []GitWorktree{{Path: "/home/me/myrepo", Branch: "refs/heads/main"}}
+	if _, err := m.resolveWorktree(".", "myrepo"); err == nil {
+		t.Error("resolving the main worktree for removal should be refused")
+	}
+}
