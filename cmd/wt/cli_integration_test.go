@@ -60,3 +60,22 @@ func TestRmCommand_RemovesWorktreeAndReportsBranch(t *testing.T) {
 		t.Errorf("merged branch should be deleted: %+v", res)
 	}
 }
+
+func TestPathCommand_PrintsWorktreePath(t *testing.T) {
+	repo := newRepoForCLI(t)
+	m, err := buildManager(repo)
+	if err != nil {
+		t.Fatalf("buildManager: %v", err)
+	}
+	added, err := m.Add(repo, worktreeAddOptions("feat", "", "", true))
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	got, err := resolveWorktreePath(m, repo, "feat")
+	if err != nil {
+		t.Fatalf("resolveWorktreePath: %v", err)
+	}
+	if got != added.Path {
+		t.Errorf("path = %q, want %q", got, added.Path)
+	}
+}
