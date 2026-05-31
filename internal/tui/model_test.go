@@ -84,59 +84,17 @@ func TestView_EmptyListStillRenders(t *testing.T) {
 	}
 }
 
-func TestNew_InputThenEnterCreatesNamedWorktree(t *testing.T) {
+func TestNew_CreatesWithGeneratedName(t *testing.T) {
 	m, rec := newTestModel(sample())
-	u, _ := m.Update(key("n")) // enter input mode
-	if u.(model).mode != modeNewInput {
-		t.Fatalf("n should enter input mode, got %v", u.(model).mode)
-	}
-	u, _ = u.(model).Update(key("x"))
-	u, _ = u.(model).Update(key("y"))
-	mm, cmd := u.(model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	mm, cmd := m.Update(key("n"))
 	if cmd == nil {
-		t.Fatal("enter should return an action command")
+		t.Fatal("n should return an action command immediately")
 	}
 	if mm.(model).mode != modeNormal {
-		t.Errorf("mode should return to normal after enter")
-	}
-	if len(*rec) != 1 || (*rec)[0] != "new xy --repo /repo" {
-		t.Errorf("runAction = %v, want [new xy --repo /repo]", *rec)
-	}
-}
-
-func TestNew_EmptyNameGenerates(t *testing.T) {
-	m, rec := newTestModel(sample())
-	u, _ := m.Update(key("n")) // input mode, empty buffer
-	_, cmd := u.(model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal("enter with empty name should still return an action command")
+		t.Errorf("n should stay in normal mode (instant create), got %v", mm.(model).mode)
 	}
 	if len(*rec) != 1 || (*rec)[0] != "new --repo /repo" {
-		t.Errorf("empty name should generate: runAction = %v, want [new --repo /repo]", *rec)
-	}
-}
-
-func TestNew_EscCancels(t *testing.T) {
-	m, rec := newTestModel(sample())
-	u, _ := m.Update(key("n"))
-	u, _ = u.(model).Update(key("a"))
-	u, _ = u.(model).Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if u.(model).mode != modeNormal {
-		t.Errorf("esc should return to normal mode")
-	}
-	if len(*rec) != 0 {
-		t.Errorf("esc should not run any action, got %v", *rec)
-	}
-}
-
-func TestNew_Backspace(t *testing.T) {
-	m, _ := newTestModel(sample())
-	u, _ := m.Update(key("n"))
-	u, _ = u.(model).Update(key("a"))
-	u, _ = u.(model).Update(key("b"))
-	u, _ = u.(model).Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if u.(model).input != "a" {
-		t.Errorf("input after backspace = %q, want %q", u.(model).input, "a")
+		t.Errorf("runAction = %v, want [new --repo /repo]", *rec)
 	}
 }
 

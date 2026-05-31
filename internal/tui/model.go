@@ -16,7 +16,6 @@ type mode int
 const (
 	modeNormal mode = iota
 	modeConfirmDelete
-	modeNewInput
 )
 
 // lister is the subset of *worktree.Manager the TUI needs to refresh its view.
@@ -40,7 +39,6 @@ type model struct {
 	items  []worktree.WorktreeInfo
 	cursor int
 	mode   mode
-	input  string
 	status string
 
 	// runAction launches a `wt` subcommand in the foreground, handing the
@@ -95,14 +93,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.reloadCmd()
 	case tea.KeyMsg:
-		switch m.mode {
-		case modeConfirmDelete:
+		if m.mode == modeConfirmDelete {
 			return m.updateConfirm(msg)
-		case modeNewInput:
-			return m.updateInput(msg)
-		default:
-			return m.updateNormal(msg)
 		}
+		return m.updateNormal(msg)
 	}
 	return m, nil
 }
@@ -129,9 +123,9 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor--
 		}
 	case "n":
-		m.mode = modeNewInput
-		m.input = ""
-		m.status = ""
+		// Create a worktree with an auto-generated name.
+		m.status = "creating worktree…"
+		return m, m.runAction("new", "--repo", m.dir)
 	case "d":
 		it, ok := m.current()
 		if !ok {
@@ -161,32 +155,6 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n", "N", "esc":
 		m.mode = modeNormal
 		return m, nil
-	}
-	return m, nil
-}
-
-func (m model) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEnter:
-		args := []string{"new"}
-		if m.input != "" {
-			args = append(args, m.input)
-		}
-		args = append(args, "--repo", m.dir)
-		m.mode = modeNormal
-		m.input = ""
-		m.status = "creating worktree…"
-		return m, m.runAction(args...)
-	case tea.KeyEsc:
-		m.mode = modeNormal
-		m.input = ""
-		return m, nil
-	case tea.KeyBackspace, tea.KeyDelete:
-		if len(m.input) > 0 {
-			m.input = m.input[:len(m.input)-1]
-		}
-	case tea.KeyRunes:
-		m.input += string(msg.Runes)
 	}
 	return m, nil
 }

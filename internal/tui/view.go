@@ -33,9 +33,6 @@ func (m model) View() string {
 		if it, ok := m.current(); ok {
 			b.WriteString(promptStyle.Render(fmt.Sprintf("Delete %s? (y/n)", filepath.Base(it.Path))) + "\n")
 		}
-	case modeNewInput:
-		b.WriteString(promptStyle.Render("New worktree name (empty = auto): ") + m.input + "▌\n")
-		b.WriteString("enter create • esc cancel\n")
 	default:
 		b.WriteString("↑/↓ move • n new • d delete • q quit\n")
 	}
