@@ -58,6 +58,49 @@ func TestRun_ExportsEnvAndRuns(t *testing.T) {
 	}
 }
 
+func TestRun_ExportsAllEnvVars(t *testing.T) {
+	repo := t.TempDir()
+	target := t.TempDir()
+	// The hook dumps every WT_* var to a marker file so we can assert each
+	// field-to-variable mapping (catches a typo in env() that the single-var
+	// test would miss).
+	writeHook(t, filepath.Join(repo, ".worktrees"), "post-create",
+		"#!/usr/bin/env bash\n{\n"+
+			"echo \"$WT_SOURCE_ROOT\"\n"+
+			"echo \"$WT_TARGET_ROOT\"\n"+
+			"echo \"$WT_NAME\"\n"+
+			"echo \"$WT_BRANCH\"\n"+
+			"echo \"$WT_BASE_REF\"\n"+
+			"echo \"$WT_CONTAINER\"\n"+
+			"echo \"$WT_REPO_NAME\"\n"+
+			"echo \"$WT_HOOK\"\n"+
+			"} > \"$WT_TARGET_ROOT/env.txt\"\n", true)
+
+	r := New(repo)
+	err := r.Run(worktree.HookContext{
+		Event:      worktree.PostCreate,
+		SourceRoot: repo,
+		TargetRoot: target,
+		Name:       "feat",
+		Branch:     "wt/feat",
+		BaseRef:    "HEAD",
+		Container:  "/cont",
+		RepoName:   "myrepo",
+		Cwd:        target,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(target, "env.txt"))
+	if err != nil {
+		t.Fatalf("env.txt not written: %v", err)
+	}
+	want := repo + "\n" + target + "\nfeat\nwt/feat\nHEAD\n/cont\nmyrepo\npost-create\n"
+	if string(got) != want {
+		t.Errorf("env vars wrong:\n got %q\nwant %q", got, want)
+	}
+}
+
 func TestRun_NonExecutableIsSkipped(t *testing.T) {
 	repo := t.TempDir()
 	writeHook(t, filepath.Join(repo, ".worktrees"), "pre-create",
