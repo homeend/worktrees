@@ -87,3 +87,12 @@ func TestInitScaffold_CreatesFilesIdempotently(t *testing.T) {
 		t.Errorf("scaffold clobbered existing config: %q", got)
 	}
 }
+
+func TestShouldLaunchTUI_RespectsTTY(t *testing.T) {
+	if shouldLaunchTUI(false) {
+		t.Error("must not launch TUI when stdout is not a TTY")
+	}
+	if !shouldLaunchTUI(true) {
+		t.Error("should launch TUI when stdout is a TTY")
+	}
+}

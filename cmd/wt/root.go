@@ -7,10 +7,12 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/code-drill/wt/internal/config"
 	"github.com/code-drill/wt/internal/git"
 	"github.com/code-drill/wt/internal/hooks"
+	"github.com/code-drill/wt/internal/tui"
 	"github.com/code-drill/wt/pkg/worktree"
 )
 
@@ -23,7 +25,22 @@ var repoFlag string
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&repoFlag, "repo", "r", "", "source repo (default: current dir)")
+
+	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		isTTY := term.IsTerminal(int(os.Stdout.Fd()))
+		if !shouldLaunchTUI(isTTY) {
+			return cmd.Help()
+		}
+		m, cwd, err := managerForWorkdir()
+		if err != nil {
+			return err
+		}
+		return tui.Run(m, cwd)
+	}
 }
+
+// shouldLaunchTUI reports whether the bare command should open the TUI.
+func shouldLaunchTUI(isTTY bool) bool { return isTTY }
 
 // workdir returns the directory wt should operate from: the --repo flag if set,
 // otherwise the current working directory.
