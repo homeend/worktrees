@@ -84,3 +84,31 @@ func TestResolve_VerifyRefAndCheckRefFormat(t *testing.T) {
 		t.Error("invalid ref accepted")
 	}
 }
+
+func TestWorktree_AddListRemovePrune(t *testing.T) {
+	r := New()
+	repo := newTestRepo(t)
+	wtPath := filepath.Join(t.TempDir(), "feature")
+	if err := r.AddWorktree(repo, wtPath, "wt/feature", "HEAD"); err != nil {
+		t.Fatalf("AddWorktree: %v", err)
+	}
+	list, err := r.ListWorktrees(repo)
+	if err != nil {
+		t.Fatalf("ListWorktrees: %v", err)
+	}
+	found := false
+	for _, w := range list {
+		if w.Path == wtPath && w.Branch == "refs/heads/wt/feature" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("new worktree not in list: %+v", list)
+	}
+	if err := r.RemoveWorktree(repo, wtPath, false); err != nil {
+		t.Fatalf("RemoveWorktree: %v", err)
+	}
+	if err := r.Prune(repo); err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+}
