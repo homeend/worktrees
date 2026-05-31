@@ -56,32 +56,60 @@ func newModel(store lister, dir string, items []worktree.WorktreeInfo) model {
 	return model{store: store, dir: dir, items: items, runAction: defaultRunAction}
 }
 
-// defaultRunAction re-invokes this binary as `wt <args>` via tea.ExecProcess,
-// which suspends the TUI and restores the normal terminal for the duration so
-// the subcommand's hook output and messages display live, then resumes. The
-// combined output is also tee'd to a temp log file whose path is reported back
-// (and surfaced in the status line on failure) so the user can inspect it.
+// loggedExec adapts an *exec.Cmd to tea.ExecCommand. The Bubble Tea runtime
+// calls SetStdin/SetStdout/SetStderr with the real terminal streams and then
+// Run; in Run we tee the child's combined output to a log file and print a
+// banner naming that log before the child starts — so the location is visible
+// above the live hook output and the output is preserved for later inspection.
+type loggedExec struct {
+	cmd     *exec.Cmd
+	log     *os.File
+	logPath string
+}
+
+func (l *loggedExec) SetStdin(r io.Reader)  { l.cmd.Stdin = r }
+func (l *loggedExec) SetStdout(w io.Writer) { l.cmd.Stdout = w }
+func (l *loggedExec) SetStderr(w io.Writer) { l.cmd.Stderr = w }
+
+func (l *loggedExec) Run() error {
+	if l.log != nil {
+		// Default stderr to stdout if the runtime left it unset.
+		if l.cmd.Stderr == nil {
+			l.cmd.Stderr = l.cmd.Stdout
+		}
+		if l.cmd.Stdout != nil {
+			l.cmd.Stdout = io.MultiWriter(l.cmd.Stdout, l.log)
+		}
+		if l.cmd.Stderr != nil {
+			l.cmd.Stderr = io.MultiWriter(l.cmd.Stderr, l.log)
+		}
+		if l.cmd.Stdout != nil && l.logPath != "" {
+			fmt.Fprintf(l.cmd.Stdout, "wt: logging this action to %s\n\n", l.logPath)
+		}
+	}
+	return l.cmd.Run()
+}
+
+// defaultRunAction re-invokes this binary as `wt <args>` via tea.Exec, which
+// suspends the TUI and restores the normal terminal for the duration so the
+// subcommand's hook output and messages display live, then resumes. Output is
+// tee'd to a temp log file; the path is announced before the run and reported
+// back so the status line can show it on completion.
 func defaultRunAction(args ...string) tea.Cmd {
 	self, err := os.Executable()
 	if err != nil {
 		self = os.Args[0]
 	}
-	c := exec.Command(self, args...)
-
-	logFile, logErr := os.CreateTemp("", "wt-action-*.log")
-	logPath := ""
-	if logErr == nil {
-		logPath = logFile.Name()
-		c.Stdin = os.Stdin
-		c.Stdout = io.MultiWriter(os.Stdout, logFile)
-		c.Stderr = io.MultiWriter(os.Stderr, logFile)
+	le := &loggedExec{cmd: exec.Command(self, args...)}
+	if f, ferr := os.CreateTemp("", "wt-action-*.log"); ferr == nil {
+		le.log = f
+		le.logPath = f.Name()
 	}
-
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		if logFile != nil {
-			logFile.Close()
+	return tea.Exec(le, func(err error) tea.Msg {
+		if le.log != nil {
+			le.log.Close()
 		}
-		return actionFinishedMsg{err: err, logPath: logPath}
+		return actionFinishedMsg{err: err, logPath: le.logPath}
 	})
 }
 
@@ -111,6 +139,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "action failed: " + msg.err.Error() + " — see " + msg.logPath
 		case msg.err != nil:
 			m.status = "action failed: " + msg.err.Error()
+		case msg.logPath != "":
+			m.status = "done — log: " + msg.logPath
 		default:
 			m.status = ""
 		}

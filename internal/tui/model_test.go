@@ -172,12 +172,22 @@ func TestActionFinished_ErrorSurfacesLogPath(t *testing.T) {
 	}
 }
 
-func TestActionFinished_SuccessClearsStatus(t *testing.T) {
+func TestActionFinished_SuccessShowsLogPath(t *testing.T) {
 	m, _ := newTestModel(sample())
 	m.status = "creating worktree…"
 	updated, _ := m.Update(actionFinishedMsg{logPath: "/tmp/wt-action-9.log"})
+	st := updated.(model).status
+	if !strings.Contains(st, "/tmp/wt-action-9.log") {
+		t.Errorf("success should show the log path, got %q", st)
+	}
+}
+
+func TestActionFinished_SuccessNoLogClearsStatus(t *testing.T) {
+	m, _ := newTestModel(sample())
+	m.status = "creating worktree…"
+	updated, _ := m.Update(actionFinishedMsg{})
 	if updated.(model).status != "" {
-		t.Errorf("success should clear status, got %q", updated.(model).status)
+		t.Errorf("success with no log should clear status, got %q", updated.(model).status)
 	}
 }
 
