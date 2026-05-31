@@ -70,9 +70,11 @@ func (h *fakeHooks) Run(ctx HookContext) error {
 }
 
 type fakeConfig struct {
-	baseRef   string
-	container string
+	baseRef      string
+	container    string
+	nameTemplate string
 }
 
-func (c fakeConfig) BaseRef() string   { return c.baseRef }
-func (c fakeConfig) Container() string { return c.container }
+func (c fakeConfig) BaseRef() string      { return c.baseRef }
+func (c fakeConfig) Container() string    { return c.container }
+func (c fakeConfig) NameTemplate() string { return c.nameTemplate }

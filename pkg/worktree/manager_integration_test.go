@@ -41,8 +41,9 @@ func (noopHooks) Run(HookContext) error { return nil }
 
 type staticCfg struct{}
 
-func (staticCfg) BaseRef() string   { return "HEAD" }
-func (staticCfg) Container() string { return "" }
+func (staticCfg) BaseRef() string      { return "HEAD" }
+func (staticCfg) Container() string    { return "" }
+func (staticCfg) NameTemplate() string { return "" }
 
 func newRealRepo(t *testing.T) string {
 	t.Helper()

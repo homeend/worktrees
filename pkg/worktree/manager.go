@@ -44,17 +44,22 @@ func (m *Manager) containerPath(repoRoot string) string {
 
 // resolveNames computes (name, branch). name omits the wt/ prefix; branch always
 // carries it. An explicit Branch overrides the derived one (still prefixed).
-func (m *Manager) resolveNames(opts AddOptions) (name, branch string) {
+// When no name is given, it is generated — honoring a configured name_template
+// if set (an invalid template is reported as an error).
+func (m *Manager) resolveNames(opts AddOptions) (name, branch string, err error) {
 	name = opts.Name
 	if name == "" {
-		name = naming.Generate(m.now(), m.digits())
+		name, err = naming.GenerateFrom(m.cfg.NameTemplate(), m.now(), m.digits())
+		if err != nil {
+			return "", "", err
+		}
 	}
 	base := opts.Branch
 	if base == "" {
 		base = name
 	}
 	branch = "wt/" + strings.TrimPrefix(base, "wt/")
-	return name, branch
+	return name, branch, nil
 }
 
 // worktreePath returns the on-disk path for a branch within the container.

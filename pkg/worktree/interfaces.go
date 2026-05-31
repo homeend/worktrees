@@ -54,5 +54,6 @@ type HookRunner interface {
 // ConfigProvider supplies resolved configuration for a repo.
 type ConfigProvider interface {
 	BaseRef() string
-	Container() string // "" => default sibling container
+	Container() string    // "" => default sibling container
+	NameTemplate() string // "" => default generated name pattern
 }

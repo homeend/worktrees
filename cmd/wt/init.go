@@ -11,7 +11,9 @@ import (
 const configTemplate = `# wt configuration. CLI flags override these values.
 # base_ref: HEAD          # default ref new branches are cut from
 # container: ""           # override container path; used verbatim
-# name_template: ""       # override the default generated name pattern
+# name_template: ""       # Go text/template for generated names; fields:
+#                         #   {{.Date}} {{.Adjective}} {{.Noun}} {{.Digits}}
+#                         # e.g. "{{.Date}}-{{.Adjective}}-{{.Noun}}-{{.Digits}}"
 `
 
 const hookTemplate = `#!/usr/bin/env bash

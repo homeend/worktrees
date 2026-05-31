@@ -38,7 +38,10 @@ func TestContainerPath_ConfigOverrideUsedVerbatim(t *testing.T) {
 
 func TestResolveNames_GeneratedWhenEmpty(t *testing.T) {
 	m, _, _ := newTestManager("/home/me/myrepo")
-	name, branch := m.resolveNames(AddOptions{})
+	name, branch, err := m.resolveNames(AddOptions{})
+	if err != nil {
+		t.Fatalf("resolveNames: %v", err)
+	}
 	// Expectation verified against internal/naming.Generate(2026-05-31 14:30, 4821):
 	// adjectives[(4821/16)%16]=adjectives[13]="eager", nouns[4821%16]=nouns[5]="canyon".
 	if name != "2026-05-31_14-30-eager-canyon-4821" {
@@ -51,7 +54,10 @@ func TestResolveNames_GeneratedWhenEmpty(t *testing.T) {
 
 func TestResolveNames_ExplicitNameGetsWtPrefix(t *testing.T) {
 	m, _, _ := newTestManager("/home/me/myrepo")
-	name, branch := m.resolveNames(AddOptions{Name: "hotfix"})
+	name, branch, err := m.resolveNames(AddOptions{Name: "hotfix"})
+	if err != nil {
+		t.Fatalf("resolveNames: %v", err)
+	}
 	if name != "hotfix" || branch != "wt/hotfix" {
 		t.Errorf("name=%q branch=%q", name, branch)
 	}
@@ -59,9 +65,39 @@ func TestResolveNames_ExplicitNameGetsWtPrefix(t *testing.T) {
 
 func TestResolveNames_ExplicitBranchHonoredWithPrefix(t *testing.T) {
 	m, _, _ := newTestManager("/home/me/myrepo")
-	_, branch := m.resolveNames(AddOptions{Name: "x", Branch: "feature/foo"})
+	_, branch, err := m.resolveNames(AddOptions{Name: "x", Branch: "feature/foo"})
+	if err != nil {
+		t.Fatalf("resolveNames: %v", err)
+	}
 	if branch != "wt/feature/foo" {
 		t.Errorf("branch = %q, want wt/feature/foo", branch)
+	}
+}
+
+func TestResolveNames_HonorsNameTemplate(t *testing.T) {
+	g := newFakeGit("/home/me/myrepo")
+	m := New(g, newFakeHooks(), fakeConfig{baseRef: "HEAD", nameTemplate: "{{.Adjective}}_{{.Noun}}"})
+	m.now = func() time.Time { return time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC) }
+	m.digits = func() int { return 4821 }
+	name, branch, err := m.resolveNames(AddOptions{})
+	if err != nil {
+		t.Fatalf("resolveNames: %v", err)
+	}
+	if name != "eager_canyon" {
+		t.Errorf("templated name = %q, want eager_canyon", name)
+	}
+	if branch != "wt/eager_canyon" {
+		t.Errorf("templated branch = %q, want wt/eager_canyon", branch)
+	}
+}
+
+func TestResolveNames_InvalidTemplateErrors(t *testing.T) {
+	g := newFakeGit("/home/me/myrepo")
+	m := New(g, newFakeHooks(), fakeConfig{baseRef: "HEAD", nameTemplate: "{{.Nope}}"})
+	m.now = func() time.Time { return time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC) }
+	m.digits = func() int { return 1 }
+	if _, _, err := m.resolveNames(AddOptions{}); err == nil {
+		t.Error("invalid name_template should produce an error")
 	}
 }
 
@@ -156,6 +192,27 @@ func TestList_MapsGitWorktrees(t *testing.T) {
 	}
 	if list[1].Branch != "refs/heads/wt/feat" {
 		t.Errorf("branch passthrough wrong: %q", list[1].Branch)
+	}
+}
+
+func TestList_ExcludesWorktreesOutsideContainer(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	g.worktrees = []GitWorktree{
+		{Path: "/home/me/myrepo", Branch: "refs/heads/main"},
+		{Path: "/home/me/myrepo.worktrees/feat", Branch: "refs/heads/wt/feat"},
+		{Path: "/elsewhere/external", Branch: "refs/heads/other"},
+	}
+	list, err := m.List(".")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("want 2 (main + container), got %d: %+v", len(list), list)
+	}
+	for _, w := range list {
+		if w.Path == "/elsewhere/external" {
+			t.Errorf("worktree outside the container should be excluded")
+		}
 	}
 }
 

@@ -46,3 +46,35 @@ func TestSanitizeDir_StripsPrefixAndSlashes(t *testing.T) {
 		t.Errorf("SanitizeDir = %q, want plain", got)
 	}
 }
+
+func TestGenerateFrom_EmptyTemplateMatchesGenerate(t *testing.T) {
+	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
+	got, err := GenerateFrom("", ts, 4821)
+	if err != nil {
+		t.Fatalf("GenerateFrom: %v", err)
+	}
+	if got != Generate(ts, 4821) {
+		t.Errorf("empty template = %q, want default %q", got, Generate(ts, 4821))
+	}
+}
+
+func TestGenerateFrom_RendersCustomTemplate(t *testing.T) {
+	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
+	got, err := GenerateFrom("{{.Adjective}}_{{.Noun}}_{{.Digits}}", ts, 4821)
+	if err != nil {
+		t.Fatalf("GenerateFrom: %v", err)
+	}
+	if got != "eager_canyon_4821" {
+		t.Errorf("custom template = %q, want eager_canyon_4821", got)
+	}
+}
+
+func TestGenerateFrom_InvalidTemplateErrors(t *testing.T) {
+	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
+	if _, err := GenerateFrom("{{.Nope}}", ts, 1); err == nil {
+		t.Error("unknown field should error (missingkey=error)")
+	}
+	if _, err := GenerateFrom("{{.Adjective", ts, 1); err == nil {
+		t.Error("malformed template should error")
+	}
+}
