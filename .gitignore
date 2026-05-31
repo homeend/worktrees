@@ -6,3 +6,6 @@
 /bin/
 *.test
 *.out
+
+# built binary
+/wt
