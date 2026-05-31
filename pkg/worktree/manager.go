@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -63,4 +64,69 @@ func (m *Manager) worktreePath(repoRoot, branch string) string {
 
 func defaultDigits() int {
 	return 1
+}
+
+// Add creates a new worktree following the create transaction:
+// resolve+validate -> pre-create hook -> git worktree add -> post-create hook.
+// A pre-create failure aborts before anything is created. A post-create failure
+// returns an error but leaves the worktree in place (no rollback, by design).
+func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return AddResult{}, fmt.Errorf("resolve repo root: %w", err)
+	}
+
+	name, branch := m.resolveNames(opts)
+	if err := m.git.CheckRefFormat(branch); err != nil {
+		return AddResult{}, fmt.Errorf("invalid branch name %q: %w", branch, err)
+	}
+	if m.git.BranchExists(repoRoot, branch) {
+		return AddResult{}, fmt.Errorf("branch %q already exists; pass a different --branch", branch)
+	}
+
+	baseRef := opts.BaseRef
+	if baseRef == "" {
+		baseRef = m.cfg.BaseRef()
+	}
+	if err := m.git.VerifyRef(repoRoot, baseRef); err != nil {
+		return AddResult{}, fmt.Errorf("base ref %q not found: %w", baseRef, err)
+	}
+
+	container := m.containerPath(repoRoot)
+	target := m.worktreePath(repoRoot, branch)
+
+	hc := HookContext{
+		SourceRoot: repoRoot,
+		TargetRoot: target,
+		Name:       name,
+		Branch:     branch,
+		BaseRef:    baseRef,
+		Container:  container,
+		RepoName:   filepath.Base(repoRoot),
+	}
+
+	if !opts.NoHooks {
+		pc := hc
+		pc.Event = PreCreate
+		pc.Cwd = repoRoot
+		if err := m.hooks.Run(pc); err != nil {
+			return AddResult{}, fmt.Errorf("pre-create hook failed (nothing created): %w", err)
+		}
+	}
+
+	if err := m.git.AddWorktree(repoRoot, target, branch, baseRef); err != nil {
+		return AddResult{}, fmt.Errorf("git worktree add: %w", err)
+	}
+
+	if !opts.NoHooks {
+		poc := hc
+		poc.Event = PostCreate
+		poc.Cwd = target
+		if err := m.hooks.Run(poc); err != nil {
+			return AddResult{Name: name, Branch: branch, Path: target, BaseRef: baseRef},
+				fmt.Errorf("post-create hook failed (worktree left in place at %s): %w", target, err)
+		}
+	}
+
+	return AddResult{Name: name, Branch: branch, Path: target, BaseRef: baseRef}, nil
 }

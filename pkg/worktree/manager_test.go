@@ -1,10 +1,13 @@
 package worktree
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+var errInjected = fmt.Errorf("injected failure")
 
 func newTestManager(root string) (*Manager, *fakeGit, *fakeHooks) {
 	g := newFakeGit(root)
@@ -68,5 +71,69 @@ func TestWorktreePath_UsesSanitizedDir(t *testing.T) {
 	want := filepath.Join("/home/me/myrepo.worktrees", "feature-foo")
 	if got != want {
 		t.Errorf("worktreePath = %q, want %q", got, want)
+	}
+}
+
+func TestAdd_HappyPathRunsHooksInOrder(t *testing.T) {
+	m, g, h := newTestManager("/home/me/myrepo")
+	res, err := m.Add(".", AddOptions{Name: "feat"})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if res.Branch != "wt/feat" {
+		t.Errorf("branch = %q", res.Branch)
+	}
+	if len(g.added) != 1 {
+		t.Errorf("expected one worktree added, got %v", g.added)
+	}
+	wantOrder := []HookEvent{PreCreate, PostCreate}
+	if len(h.calls) != 2 || h.calls[0] != wantOrder[0] || h.calls[1] != wantOrder[1] {
+		t.Errorf("hook order = %v, want %v", h.calls, wantOrder)
+	}
+}
+
+func TestAdd_PreCreateFailureAbortsBeforeAdd(t *testing.T) {
+	m, g, h := newTestManager("/home/me/myrepo")
+	h.failOn[PreCreate] = errInjected
+	_, err := m.Add(".", AddOptions{Name: "feat"})
+	if err == nil {
+		t.Fatal("expected error from pre-create failure")
+	}
+	if len(g.added) != 0 {
+		t.Errorf("nothing should be added when pre-create fails, got %v", g.added)
+	}
+}
+
+func TestAdd_PostCreateFailureLeavesWorktree(t *testing.T) {
+	m, g, h := newTestManager("/home/me/myrepo")
+	h.failOn[PostCreate] = errInjected
+	_, err := m.Add(".", AddOptions{Name: "feat"})
+	if err == nil {
+		t.Fatal("expected error from post-create failure")
+	}
+	if len(g.added) != 1 {
+		t.Errorf("worktree should remain after post-create failure (no rollback); added=%v", g.added)
+	}
+	if len(g.removedPaths) != 0 {
+		t.Errorf("no rollback expected; removed=%v", g.removedPaths)
+	}
+}
+
+func TestAdd_RejectsExistingBranch(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	g.branches["wt/feat"] = true
+	_, err := m.Add(".", AddOptions{Name: "feat"})
+	if err == nil {
+		t.Fatal("expected error when branch already exists")
+	}
+}
+
+func TestAdd_NoHooksSkipsHooks(t *testing.T) {
+	m, _, h := newTestManager("/home/me/myrepo")
+	if _, err := m.Add(".", AddOptions{Name: "feat", NoHooks: true}); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if len(h.calls) != 0 {
+		t.Errorf("hooks should be skipped, got %v", h.calls)
 	}
 }
