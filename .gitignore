@@ -1,0 +1,8 @@
+# Claude Code / tooling state
+.claude/
+.claude-mem/
+
+# Go
+/bin/
+*.test
+*.out
