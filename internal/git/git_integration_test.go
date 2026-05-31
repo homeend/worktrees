@@ -49,3 +49,38 @@ func TestRunner_VersionAndRun(t *testing.T) {
 		t.Errorf("unexpected git major version: %+v", v)
 	}
 }
+
+func TestResolve_MainRootFromWorktree(t *testing.T) {
+	r := New()
+	repo := newTestRepo(t)
+	wtPath := repo + ".wt-test"
+	if _, err := r.Run(repo, "worktree", "add", wtPath); err != nil {
+		t.Fatalf("setup worktree add: %v", err)
+	}
+	t.Cleanup(func() { _, _ = r.Run(repo, "worktree", "remove", "--force", wtPath) })
+	got, err := r.MainRoot(wtPath)
+	if err != nil {
+		t.Fatalf("MainRoot: %v", err)
+	}
+	want, _ := r.TopLevel(repo)
+	if got != want {
+		t.Errorf("MainRoot from worktree = %q, want main repo root %q", got, want)
+	}
+}
+
+func TestResolve_VerifyRefAndCheckRefFormat(t *testing.T) {
+	r := New()
+	repo := newTestRepo(t)
+	if err := r.VerifyRef(repo, "HEAD"); err != nil {
+		t.Errorf("HEAD should verify: %v", err)
+	}
+	if err := r.VerifyRef(repo, "no-such-ref"); err == nil {
+		t.Error("bogus ref should not verify")
+	}
+	if err := r.CheckRefFormat("wt/2026-05-31_10-00-snowy-beach-4821"); err != nil {
+		t.Errorf("valid ref rejected: %v", err)
+	}
+	if err := r.CheckRefFormat("bad..ref"); err == nil {
+		t.Error("invalid ref accepted")
+	}
+}
