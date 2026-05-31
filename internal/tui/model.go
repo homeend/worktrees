@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,8 +25,12 @@ type lister interface {
 }
 
 // actionFinishedMsg is delivered when a foreground `wt` action (run via
-// tea.ExecProcess) completes.
-type actionFinishedMsg struct{ err error }
+// tea.ExecProcess) completes. logPath, when set, is where the action's combined
+// output was written so the user can inspect it (especially on failure).
+type actionFinishedMsg struct {
+	err     error
+	logPath string
+}
 
 // reloadMsg carries a refreshed worktree list.
 type reloadMsg struct {
@@ -52,16 +57,31 @@ func newModel(store lister, dir string, items []worktree.WorktreeInfo) model {
 }
 
 // defaultRunAction re-invokes this binary as `wt <args>` via tea.ExecProcess,
-// which suspends the TUI, restores the normal terminal for the duration (so the
-// subcommand's hook output and messages display correctly), then resumes.
+// which suspends the TUI and restores the normal terminal for the duration so
+// the subcommand's hook output and messages display live, then resumes. The
+// combined output is also tee'd to a temp log file whose path is reported back
+// (and surfaced in the status line on failure) so the user can inspect it.
 func defaultRunAction(args ...string) tea.Cmd {
 	self, err := os.Executable()
 	if err != nil {
 		self = os.Args[0]
 	}
 	c := exec.Command(self, args...)
+
+	logFile, logErr := os.CreateTemp("", "wt-action-*.log")
+	logPath := ""
+	if logErr == nil {
+		logPath = logFile.Name()
+		c.Stdin = os.Stdin
+		c.Stdout = io.MultiWriter(os.Stdout, logFile)
+		c.Stderr = io.MultiWriter(os.Stderr, logFile)
+	}
+
 	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return actionFinishedMsg{err: err}
+		if logFile != nil {
+			logFile.Close()
+		}
+		return actionFinishedMsg{err: err, logPath: logPath}
 	})
 }
 
@@ -86,9 +106,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clampCursor()
 		return m, nil
 	case actionFinishedMsg:
-		if msg.err != nil {
+		switch {
+		case msg.err != nil && msg.logPath != "":
+			m.status = "action failed: " + msg.err.Error() + " — see " + msg.logPath
+		case msg.err != nil:
 			m.status = "action failed: " + msg.err.Error()
-		} else {
+		default:
 			m.status = ""
 		}
 		return m, m.reloadCmd()

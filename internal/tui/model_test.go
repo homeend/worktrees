@@ -160,6 +160,31 @@ func TestActionFinished_TriggersReload(t *testing.T) {
 	}
 }
 
+func TestActionFinished_ErrorSurfacesLogPath(t *testing.T) {
+	m, _ := newTestModel(sample())
+	updated, _ := m.Update(actionFinishedMsg{err: errFake("boom"), logPath: "/tmp/wt-action-123.log"})
+	st := updated.(model).status
+	if !strings.Contains(st, "/tmp/wt-action-123.log") {
+		t.Errorf("status should mention the log path, got %q", st)
+	}
+	if !strings.Contains(st, "boom") {
+		t.Errorf("status should mention the error, got %q", st)
+	}
+}
+
+func TestActionFinished_SuccessClearsStatus(t *testing.T) {
+	m, _ := newTestModel(sample())
+	m.status = "creating worktree…"
+	updated, _ := m.Update(actionFinishedMsg{logPath: "/tmp/wt-action-9.log"})
+	if updated.(model).status != "" {
+		t.Errorf("success should clear status, got %q", updated.(model).status)
+	}
+}
+
+type errFake string
+
+func (e errFake) Error() string { return string(e) }
+
 func TestReload_UpdatesItemsAndClampsCursor(t *testing.T) {
 	m, _ := newTestModel(sample())
 	m.cursor = 1
