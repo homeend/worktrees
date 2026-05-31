@@ -70,6 +70,8 @@ func defaultDigits() int {
 // resolve+validate -> pre-create hook -> git worktree add -> post-create hook.
 // A pre-create failure aborts before anything is created. A post-create failure
 // returns an error but leaves the worktree in place (no rollback, by design).
+// On a post-create failure the returned AddResult is populated (the worktree
+// exists); on earlier failures it is the zero value.
 func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	repoRoot, err := m.git.MainRoot(dir)
 	if err != nil {
@@ -180,7 +182,9 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 // Remove tears down a worktree: pre-remove hook -> git worktree remove ->
 // branch delete (safe unless ForceBranch) -> post-remove hook. A safe-delete
 // refusal (unmerged branch) is not fatal: the worktree is still removed and the
-// result reports BranchKept so the CLI can tell the user.
+// result reports BranchKept so the CLI can tell the user. When an error is
+// returned mid-transaction the RemoveResult is partially populated, reflecting
+// the steps that completed.
 func (m *Manager) Remove(dir string, opts RemoveOptions) (RemoveResult, error) {
 	repoRoot, err := m.git.MainRoot(dir)
 	if err != nil {
