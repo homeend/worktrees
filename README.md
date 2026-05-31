@@ -349,3 +349,13 @@ The architecture is layered: `pkg/worktree` holds the reusable `Manager` and the
 `internal/config`, `internal/hooks`, and `internal/naming` provide the default
 implementations; `cmd/wt` wires them together for the CLI and `internal/tui`
 renders the interactive view.
+
+## Documentation
+
+- **[Functional requirements](docs/FUNCTIONAL-REQUIREMENTS.md)** — the source of
+  truth for *what `wt` does and how it behaves* (feature-by-feature, with stable
+  `FR-…` IDs). Update it whenever behavior changes.
+- [Design spec](docs/superpowers/specs/2026-05-31-wt-git-worktree-utility-design.md)
+  — the original design decisions and architecture (HOW it's built).
+- [Implementation plan](docs/superpowers/plans/2026-05-31-wt-git-worktree-utility.md)
+  — the phased build plan.

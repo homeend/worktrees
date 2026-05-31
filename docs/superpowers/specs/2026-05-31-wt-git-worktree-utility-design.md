@@ -1,7 +1,11 @@
 # `wt` — Git Worktree Utility — Design
 
 **Date:** 2026-05-31
-**Status:** Approved design, pre-implementation
+**Status:** Implemented. This document records the original design and
+architecture (HOW it's built). For current observable behavior — what `wt` does
+and how it behaves, including features added after this spec (interactive TUI
+create/delete, action logging) — see the living
+[Functional Requirements](../../FUNCTIONAL-REQUIREMENTS.md).
 **Author:** code.drill.eu@gmail.com (with Claude)
 
 ## 1. Purpose
