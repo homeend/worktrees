@@ -201,7 +201,9 @@ Creates `.worktrees/` containing:
 
 ## 11. Testing strategy
 
-TDD throughout. Riskiest-first.
+TDD throughout. Riskiest-first. **Every package ships both unit tests and integration
+tests** — unit tests with fakes for fast logic coverage, integration tests against
+throwaway real git repos in temp dirs for end-to-end correctness.
 
 - `internal/git`: integration tests against throwaway real git repos in temp dirs —
   porcelain `-z` parsing (incl. spaces in paths, bare/detached/locked/prunable), common-dir
@@ -226,6 +228,16 @@ TDD throughout. Riskiest-first.
    guard; exit codes.
 7. `internal/tui` (last; over the now-stable Manager).
 8. `main.go` thin entrypoint.
+
+### Per-phase review gates (mandatory)
+Each phase above is **not complete** until all of the following pass — no phase advances
+with a gate outstanding:
+1. **Tests written** — unit **and** integration tests for the phase's code, all green.
+2. **Code review** — correctness, error handling, idioms (subagent-driven).
+3. **Test review** — coverage and quality of the tests themselves (are the right failure
+   modes and edge cases exercised, not just happy paths).
+4. **Architectural review** — boundaries, dependency direction, and interface fit vs. this
+   spec (subagent-driven).
 
 ## 13. Future directions (NOT v1)
 
