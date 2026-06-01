@@ -70,9 +70,11 @@ WT_BRANCH_PREFIX (env)  >  branch_prefix (config file)  >  default "wt/"
 - New `LoadFile(repoRoot) (Config, error)`: reads **only** the YAML file and
   returns the raw parsed config (missing file → zero `Config`, nil error). Used
   by `--safe` to inspect the persisted value without defaults/env mixed in.
-- `Load(repoRoot)` becomes: `Defaults()` → merge file (`LoadFile`) → merge env
-  (`WT_BRANCH_PREFIX`) → normalize `BranchPrefix`. Env is read here, scoped to
-  the prefix only.
+- `Load(repoRoot)` becomes an explicit Resolve-chain so the env layer
+  generalizes cleanly if more fields gain one later:
+  `normalize( Resolve( Resolve(Defaults(), fileCfg), envCfg() ) )`.
+  `envCfg()` returns a `Config` populated only from `WT_BRANCH_PREFIX` today
+  (scoped to the prefix). Normalization is applied once, at the end.
 - New writer `Set(repoRoot, key, value string) error`:
   - Validates `key` (only `branch_prefix` today; unknown → error).
   - Normalizes the value; rejects empty.
@@ -80,7 +82,12 @@ WT_BRANCH_PREFIX (env)  >  branch_prefix (config file)  >  default "wt/"
     `branch_prefix:` line exists, replace it; otherwise append
     `branch_prefix: "<value>"`. This preserves the comment template that `init`
     writes (a full YAML re-marshal would discard those hints). The value is
-    quoted for safety. This is sound because config keys are flat scalars.
+    quoted for safety.
+
+    > **Constraint:** the line-based upsert is sound **only** because every
+    > config key is a flat top-level scalar. If the schema ever gains nested
+    > structures, replace this with a `yaml.Node` round-trip. This constraint is
+    > called out so the assumption isn't silently broken later.
   - If the file/dir is absent, create `.worktrees/` and write a file containing
     just the `branch_prefix:` line. (No cross-package coupling to the `init`
     template constant; the full commented template remains `wt init`'s job.)
