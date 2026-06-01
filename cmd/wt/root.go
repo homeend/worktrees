@@ -105,15 +105,26 @@ func (a cfgAdapter) Container() string    { return a.c.Container }
 func (a cfgAdapter) NameTemplate() string { return a.c.NameTemplate }
 func (a cfgAdapter) BranchPrefix() string { return a.c.BranchPrefix }
 
+// repoRootFor resolves the main repo root for cwd, after checking the git
+// version. Shared by commands that need the repo root without a full Manager.
+func repoRootFor(cwd string) (string, error) {
+	r := git.New()
+	if err := r.EnsureMinVersion(2, 30); err != nil {
+		return "", err
+	}
+	root, err := r.MainRoot(cwd)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrNotARepo, err)
+	}
+	return root, nil
+}
+
 // buildManager resolves the repo root and wires a Manager. cwd is where wt runs.
 func buildManager(cwd string) (*worktree.Manager, error) {
 	r := git.New()
-	if err := r.EnsureMinVersion(2, 30); err != nil {
-		return nil, err
-	}
-	repoRoot, err := r.MainRoot(cwd)
+	repoRoot, err := repoRootFor(cwd)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrNotARepo, err)
+		return nil, err
 	}
 	cfg, err := config.Load(repoRoot)
 	if err != nil {
