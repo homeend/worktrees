@@ -73,8 +73,10 @@ type fakeConfig struct {
 	baseRef      string
 	container    string
 	nameTemplate string
+	branchPrefix string
 }
 
 func (c fakeConfig) BaseRef() string      { return c.baseRef }
 func (c fakeConfig) Container() string    { return c.container }
 func (c fakeConfig) NameTemplate() string { return c.nameTemplate }
+func (c fakeConfig) BranchPrefix() string { return c.branchPrefix }

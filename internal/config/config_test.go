@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -103,5 +104,139 @@ func TestLoad_PartialConfigPreservesDefaults(t *testing.T) {
 	}
 	if cfg.NameTemplate != "" {
 		t.Errorf("NameTemplate should be empty, got %q", cfg.NameTemplate)
+	}
+}
+
+func TestDefaults_BranchPrefix(t *testing.T) {
+	if got := Defaults().BranchPrefix; got != "wt/" {
+		t.Errorf("Defaults().BranchPrefix = %q, want %q", got, "wt/")
+	}
+}
+
+func TestResolve_BranchPrefixOverrides(t *testing.T) {
+	lo := Config{BranchPrefix: "wt/"}
+	hi := Config{BranchPrefix: "feature/"}
+	if got := Resolve(lo, hi).BranchPrefix; got != "feature/" {
+		t.Errorf("Resolve BranchPrefix = %q, want %q", got, "feature/")
+	}
+	if got := Resolve(lo, Config{}).BranchPrefix; got != "wt/" {
+		t.Errorf("Resolve with empty hi = %q, want %q", got, "wt/")
+	}
+}
+
+func TestNormalizePrefix(t *testing.T) {
+	cases := map[string]string{
+		"":         "",
+		"feature":  "feature/",
+		"feature/": "feature/",
+		"wt":       "wt/",
+	}
+	for in, want := range cases {
+		if got := NormalizePrefix(in); got != want {
+			t.Errorf("NormalizePrefix(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestLoadFile_MissingReturnsZero(t *testing.T) {
+	cfg, err := LoadFile(t.TempDir())
+	if err != nil {
+		t.Fatalf("LoadFile error: %v", err)
+	}
+	if cfg.BranchPrefix != "" {
+		t.Errorf("missing file BranchPrefix = %q, want empty", cfg.BranchPrefix)
+	}
+}
+
+func TestLoad_EnvOverridesFileAndNormalizes(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".worktrees"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "branch_prefix: \"file/\"\n"
+	if err := os.WriteFile(filepath.Join(dir, ".worktrees", "config.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("WT_BRANCH_PREFIX", "")
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BranchPrefix != "file/" {
+		t.Errorf("file BranchPrefix = %q, want %q", cfg.BranchPrefix, "file/")
+	}
+
+	t.Setenv("WT_BRANCH_PREFIX", "env")
+	cfg, err = Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BranchPrefix != "env/" {
+		t.Errorf("env BranchPrefix = %q, want %q", cfg.BranchPrefix, "env/")
+	}
+}
+
+func TestLoad_DefaultWhenNothingSet(t *testing.T) {
+	t.Setenv("WT_BRANCH_PREFIX", "")
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BranchPrefix != "wt/" {
+		t.Errorf("default BranchPrefix = %q, want %q", cfg.BranchPrefix, "wt/")
+	}
+}
+
+func TestSet_WritesAndReadsBack(t *testing.T) {
+	dir := t.TempDir()
+	if err := Set(dir, "branch_prefix", "feature"); err != nil {
+		t.Fatalf("Set error: %v", err)
+	}
+	cfg, err := LoadFile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BranchPrefix != "feature/" {
+		t.Errorf("BranchPrefix = %q, want %q (normalized)", cfg.BranchPrefix, "feature/")
+	}
+}
+
+func TestSet_UpdatesExistingAndPreservesComments(t *testing.T) {
+	dir := t.TempDir()
+	wt := filepath.Join(dir, ".worktrees")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "# a helpful comment\nbranch_prefix: \"old/\"\n"
+	if err := os.WriteFile(filepath.Join(wt, "config.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Set(dir, "branch_prefix", "new"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := os.ReadFile(filepath.Join(wt, "config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if !strings.Contains(s, "# a helpful comment") {
+		t.Errorf("comment not preserved:\n%s", s)
+	}
+	if strings.Contains(s, "old/") {
+		t.Errorf("old value not replaced:\n%s", s)
+	}
+	if !strings.Contains(s, "branch_prefix: \"new/\"") {
+		t.Errorf("new value missing:\n%s", s)
+	}
+}
+
+func TestSet_RejectsUnknownKeyAndEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := Set(dir, "nope", "x"); err == nil {
+		t.Error("expected error for unknown key")
+	}
+	if err := Set(dir, "branch_prefix", ""); err == nil {
+		t.Error("expected error for empty value")
 	}
 }

@@ -56,8 +56,8 @@ func GenerateFrom(tmpl string, ts time.Time, digits int) (string, error) {
 }
 
 // SanitizeDir converts a branch-style name into a filesystem-safe directory
-// name: strips a leading "wt/" prefix and replaces remaining slashes with "-".
-func SanitizeDir(name string) string {
-	name = strings.TrimPrefix(name, "wt/")
+// name: strips the given branch prefix and replaces remaining slashes with "-".
+func SanitizeDir(name, prefix string) string {
+	name = strings.TrimPrefix(name, prefix)
 	return strings.ReplaceAll(name, "/", "-")
 }

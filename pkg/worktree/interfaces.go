@@ -56,4 +56,5 @@ type ConfigProvider interface {
 	BaseRef() string
 	Container() string    // "" => default sibling container
 	NameTemplate() string // "" => default generated name pattern
+	BranchPrefix() string // "" => caller falls back to default
 }

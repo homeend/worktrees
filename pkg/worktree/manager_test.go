@@ -12,7 +12,7 @@ var errInjected = fmt.Errorf("injected failure")
 func newTestManager(root string) (*Manager, *fakeGit, *fakeHooks) {
 	g := newFakeGit(root)
 	h := newFakeHooks()
-	cfg := fakeConfig{baseRef: "HEAD"}
+	cfg := fakeConfig{baseRef: "HEAD", branchPrefix: "wt/"}
 	m := New(g, h, cfg)
 	m.now = func() time.Time { return time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC) }
 	m.digits = func() int { return 4821 }
@@ -74,9 +74,20 @@ func TestResolveNames_ExplicitBranchHonoredWithPrefix(t *testing.T) {
 	}
 }
 
+func TestResolveNames_CustomPrefix(t *testing.T) {
+	m := New(newFakeGit("/repo"), newFakeHooks(), fakeConfig{branchPrefix: "feature/"})
+	_, branch, err := m.resolveNames(AddOptions{Name: "thing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "feature/thing" {
+		t.Errorf("branch = %q, want %q", branch, "feature/thing")
+	}
+}
+
 func TestResolveNames_HonorsNameTemplate(t *testing.T) {
 	g := newFakeGit("/home/me/myrepo")
-	m := New(g, newFakeHooks(), fakeConfig{baseRef: "HEAD", nameTemplate: "{{.Adjective}}_{{.Noun}}"})
+	m := New(g, newFakeHooks(), fakeConfig{baseRef: "HEAD", branchPrefix: "wt/", nameTemplate: "{{.Adjective}}_{{.Noun}}"})
 	m.now = func() time.Time { return time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC) }
 	m.digits = func() int { return 4821 }
 	name, branch, err := m.resolveNames(AddOptions{})

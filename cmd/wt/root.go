@@ -103,6 +103,7 @@ type cfgAdapter struct{ c config.Config }
 func (a cfgAdapter) BaseRef() string      { return a.c.BaseRef }
 func (a cfgAdapter) Container() string    { return a.c.Container }
 func (a cfgAdapter) NameTemplate() string { return a.c.NameTemplate }
+func (a cfgAdapter) BranchPrefix() string { return a.c.BranchPrefix }
 
 // buildManager resolves the repo root and wires a Manager. cwd is where wt runs.
 func buildManager(cwd string) (*worktree.Manager, error) {

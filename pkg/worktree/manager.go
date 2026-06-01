@@ -58,13 +58,14 @@ func (m *Manager) resolveNames(opts AddOptions) (name, branch string, err error)
 	if base == "" {
 		base = name
 	}
-	branch = "wt/" + strings.TrimPrefix(base, "wt/")
+	prefix := m.cfg.BranchPrefix()
+	branch = prefix + strings.TrimPrefix(base, prefix)
 	return name, branch, nil
 }
 
 // worktreePath returns the on-disk path for a branch within the container.
 func (m *Manager) worktreePath(repoRoot, branch string) string {
-	return filepath.Join(m.containerPath(repoRoot), naming.SanitizeDir(branch))
+	return filepath.Join(m.containerPath(repoRoot), naming.SanitizeDir(branch, m.cfg.BranchPrefix()))
 }
 
 func defaultDigits() int {
@@ -182,9 +183,10 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 	if err != nil {
 		return WorktreeInfo{}, err
 	}
-	wantBranch := "refs/heads/wt/" + strings.TrimPrefix(name, "wt/")
+	prefix := m.cfg.BranchPrefix()
+	wantBranch := "refs/heads/" + prefix + strings.TrimPrefix(name, prefix)
 	for _, w := range list {
-		byDir := filepath.Base(w.Path) == naming.SanitizeDir(name)
+		byDir := filepath.Base(w.Path) == naming.SanitizeDir(name, prefix)
 		byBranch := w.Branch == wantBranch || w.Branch == "refs/heads/"+name
 		if byDir || byBranch {
 			if w.IsMain {
