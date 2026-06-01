@@ -77,11 +77,14 @@ func Execute() int {
 // gitAdapter bridges *git.Runner to worktree.GitRunner.
 type gitAdapter struct{ r *git.Runner }
 
-func (a gitAdapter) MainRoot(d string) (string, error)              { return a.r.MainRoot(d) }
-func (a gitAdapter) VerifyRef(d, ref string) error                  { return a.r.VerifyRef(d, ref) }
-func (a gitAdapter) CheckRefFormat(b string) error                  { return a.r.CheckRefFormat(b) }
-func (a gitAdapter) BranchExists(d, b string) bool                  { return a.r.BranchExists(d, b) }
-func (a gitAdapter) AddWorktree(d, p, b, base string) error         { return a.r.AddWorktree(d, p, b, base) }
+func (a gitAdapter) MainRoot(d string) (string, error)      { return a.r.MainRoot(d) }
+func (a gitAdapter) VerifyRef(d, ref string) error          { return a.r.VerifyRef(d, ref) }
+func (a gitAdapter) CheckRefFormat(b string) error          { return a.r.CheckRefFormat(b) }
+func (a gitAdapter) BranchExists(d, b string) bool          { return a.r.BranchExists(d, b) }
+func (a gitAdapter) AddWorktree(d, p, b, base string) error { return a.r.AddWorktree(d, p, b, base) }
+func (a gitAdapter) AddWorktreeExisting(d, p, b string) error {
+	return a.r.AddWorktreeExisting(d, p, b)
+}
 func (a gitAdapter) RemoveWorktree(d, p string, f bool) error       { return a.r.RemoveWorktree(d, p, f) }
 func (a gitAdapter) DeleteBranch(d, b string, f bool) (bool, error) { return a.r.DeleteBranch(d, b, f) }
 func (a gitAdapter) ListBranches(d, p string) ([]string, error)     { return a.r.ListBranches(d, p) }
@@ -105,6 +108,13 @@ func (a cfgAdapter) BaseRef() string      { return a.c.BaseRef }
 func (a cfgAdapter) Container() string    { return a.c.Container }
 func (a cfgAdapter) NameTemplate() string { return a.c.NameTemplate }
 func (a cfgAdapter) BranchPrefix() string { return a.c.BranchPrefix }
+func (a cfgAdapter) Templates() []worktree.Template {
+	out := make([]worktree.Template, len(a.c.Templates))
+	for i, t := range a.c.Templates {
+		out[i] = worktree.Template{Name: t.Name, Template: t.Template}
+	}
+	return out
+}
 
 // repoRootFor resolves the main repo root for cwd, after checking the git
 // version. Shared by commands that need the repo root without a full Manager.

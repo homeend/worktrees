@@ -9,12 +9,19 @@ type WorktreeInfo struct {
 	Detached bool
 }
 
+// Template is a named branch-name template exposed to the CLI/TUI.
+type Template struct {
+	Name     string
+	Template string
+}
+
 // AddOptions controls Add.
 type AddOptions struct {
-	Name    string // optional; generated if empty
-	Branch  string // optional; defaults to "wt/"+Name
-	BaseRef string // optional; defaults to config BaseRef
-	NoHooks bool
+	Name       string // optional; generated if empty
+	Branch     string // optional; defaults to "wt/"+Name
+	BaseRef    string // optional; defaults to config BaseRef
+	NoHooks    bool
+	FromBranch string // when set: check out this existing branch instead of cutting a new one
 }
 
 // AddResult reports the outcome of Add.

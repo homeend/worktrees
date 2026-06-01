@@ -13,11 +13,14 @@ import (
 
 type gitAdapter struct{ r *git.Runner }
 
-func (a gitAdapter) MainRoot(d string) (string, error)        { return a.r.MainRoot(d) }
-func (a gitAdapter) VerifyRef(d, ref string) error            { return a.r.VerifyRef(d, ref) }
-func (a gitAdapter) CheckRefFormat(b string) error            { return a.r.CheckRefFormat(b) }
-func (a gitAdapter) BranchExists(d, b string) bool            { return a.r.BranchExists(d, b) }
-func (a gitAdapter) AddWorktree(d, p, b, base string) error   { return a.r.AddWorktree(d, p, b, base) }
+func (a gitAdapter) MainRoot(d string) (string, error)      { return a.r.MainRoot(d) }
+func (a gitAdapter) VerifyRef(d, ref string) error          { return a.r.VerifyRef(d, ref) }
+func (a gitAdapter) CheckRefFormat(b string) error          { return a.r.CheckRefFormat(b) }
+func (a gitAdapter) BranchExists(d, b string) bool          { return a.r.BranchExists(d, b) }
+func (a gitAdapter) AddWorktree(d, p, b, base string) error { return a.r.AddWorktree(d, p, b, base) }
+func (a gitAdapter) AddWorktreeExisting(d, p, b string) error {
+	return a.r.AddWorktreeExisting(d, p, b)
+}
 func (a gitAdapter) RemoveWorktree(d, p string, f bool) error { return a.r.RemoveWorktree(d, p, f) }
 func (a gitAdapter) DeleteBranch(d, b string, f bool) (bool, error) {
 	return a.r.DeleteBranch(d, b, f)
@@ -42,10 +45,11 @@ func (noopHooks) Run(HookContext) error { return nil }
 
 type staticCfg struct{}
 
-func (staticCfg) BaseRef() string      { return "HEAD" }
-func (staticCfg) Container() string    { return "" }
-func (staticCfg) NameTemplate() string { return "" }
-func (staticCfg) BranchPrefix() string { return "wt/" }
+func (staticCfg) BaseRef() string       { return "HEAD" }
+func (staticCfg) Container() string     { return "" }
+func (staticCfg) NameTemplate() string  { return "" }
+func (staticCfg) BranchPrefix() string  { return "wt/" }
+func (staticCfg) Templates() []Template { return nil }
 
 func newRealRepo(t *testing.T) string {
 	t.Helper()

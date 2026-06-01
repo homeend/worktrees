@@ -43,6 +43,15 @@ func (f *fakeGit) AddWorktree(_, path, branch, _ string) error {
 	return nil
 }
 
+func (f *fakeGit) AddWorktreeExisting(_, path, branch string) error {
+	if f.addErr != nil {
+		return f.addErr
+	}
+	f.added = append(f.added, path)
+	f.worktrees = append(f.worktrees, GitWorktree{Path: path, Branch: "refs/heads/" + branch})
+	return nil
+}
+
 func (f *fakeGit) RemoveWorktree(_, path string, _ bool) error {
 	if f.removeErr != nil {
 		return f.removeErr
@@ -85,9 +94,11 @@ type fakeConfig struct {
 	container    string
 	nameTemplate string
 	branchPrefix string
+	templates    []Template
 }
 
-func (c fakeConfig) BaseRef() string      { return c.baseRef }
-func (c fakeConfig) Container() string    { return c.container }
-func (c fakeConfig) NameTemplate() string { return c.nameTemplate }
-func (c fakeConfig) BranchPrefix() string { return c.branchPrefix }
+func (c fakeConfig) BaseRef() string       { return c.baseRef }
+func (c fakeConfig) Container() string     { return c.container }
+func (c fakeConfig) NameTemplate() string  { return c.nameTemplate }
+func (c fakeConfig) BranchPrefix() string  { return c.branchPrefix }
+func (c fakeConfig) Templates() []Template { return c.templates }

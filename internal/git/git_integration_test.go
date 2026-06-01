@@ -113,6 +113,31 @@ func TestWorktree_AddListRemovePrune(t *testing.T) {
 	}
 }
 
+func TestAddWorktreeExisting_ChecksOutExistingBranch(t *testing.T) {
+	r := New()
+	repo := newTestRepo(t)
+	if _, err := r.Run(repo, "branch", "feature/login"); err != nil {
+		t.Fatalf("setup branch: %v", err)
+	}
+	wtPath := filepath.Join(t.TempDir(), "login")
+	if err := r.AddWorktreeExisting(repo, wtPath, "feature/login"); err != nil {
+		t.Fatalf("AddWorktreeExisting: %v", err)
+	}
+	list, err := r.ListWorktrees(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, w := range list {
+		if w.Path == wtPath && w.Branch == "refs/heads/feature/login" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("existing-branch worktree not in list: %+v", list)
+	}
+}
+
 func TestListBranches_FiltersByPrefix(t *testing.T) {
 	repo := newTestRepo(t)
 	r := New()

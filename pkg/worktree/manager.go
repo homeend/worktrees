@@ -3,6 +3,7 @@ package worktree
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,23 +85,37 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 		return AddResult{}, fmt.Errorf("resolve repo root: %w", err)
 	}
 
-	name, branch, err := m.resolveNames(opts)
-	if err != nil {
-		return AddResult{}, err
+	fromExisting := opts.FromBranch != ""
+	var name, branch, baseRef string
+	if fromExisting {
+		branch = opts.FromBranch
+		name = naming.SanitizeDir(branch, m.cfg.BranchPrefix())
+	} else {
+		name, branch, err = m.resolveNames(opts)
+		if err != nil {
+			return AddResult{}, err
+		}
 	}
+
 	if err := m.git.CheckRefFormat(branch); err != nil {
 		return AddResult{}, fmt.Errorf("invalid branch name %q: %w", branch, err)
 	}
-	if m.git.BranchExists(repoRoot, branch) {
-		return AddResult{}, fmt.Errorf("branch %q already exists; pass a different --branch", branch)
-	}
 
-	baseRef := opts.BaseRef
-	if baseRef == "" {
-		baseRef = m.cfg.BaseRef()
-	}
-	if err := m.git.VerifyRef(repoRoot, baseRef); err != nil {
-		return AddResult{}, fmt.Errorf("base ref %q not found: %w", baseRef, err)
+	if fromExisting {
+		if !m.git.BranchExists(repoRoot, branch) {
+			return AddResult{}, fmt.Errorf("branch %q does not exist locally", branch)
+		}
+	} else {
+		if m.git.BranchExists(repoRoot, branch) {
+			return AddResult{}, fmt.Errorf("branch %q already exists; pass a different --branch", branch)
+		}
+		baseRef = opts.BaseRef
+		if baseRef == "" {
+			baseRef = m.cfg.BaseRef()
+		}
+		if err := m.git.VerifyRef(repoRoot, baseRef); err != nil {
+			return AddResult{}, fmt.Errorf("base ref %q not found: %w", baseRef, err)
+		}
 	}
 
 	container := m.containerPath(repoRoot)
@@ -125,8 +140,14 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 		}
 	}
 
-	if err := m.git.AddWorktree(repoRoot, target, branch, baseRef); err != nil {
-		return AddResult{}, fmt.Errorf("git worktree add: %w", err)
+	if fromExisting {
+		if err := m.git.AddWorktreeExisting(repoRoot, target, branch); err != nil {
+			return AddResult{}, fmt.Errorf("git worktree add: %w", err)
+		}
+	} else {
+		if err := m.git.AddWorktree(repoRoot, target, branch, baseRef); err != nil {
+			return AddResult{}, fmt.Errorf("git worktree add: %w", err)
+		}
 	}
 
 	if !opts.NoHooks {
@@ -263,6 +284,37 @@ func (m *Manager) Remove(dir string, opts RemoveOptions) (RemoveResult, error) {
 // refusing the main worktree. Exposed for callers like `wt path`.
 func (m *Manager) Find(dir, name string) (WorktreeInfo, error) {
 	return m.resolveWorktree(dir, name)
+}
+
+// Templates returns the configured templates (for `wt templates` / the TUI).
+func (m *Manager) Templates() []Template { return m.cfg.Templates() }
+
+// ResolveTemplate finds a template by name or 1-based number and renders it with
+// vars. The rendered string is intended to be used as AddOptions.Name (the
+// prefix is applied by the normal Add flow). Unknown ref or a missing variable
+// is an error.
+func (m *Manager) ResolveTemplate(ref string, vars map[string]string) (string, error) {
+	tmpls := m.cfg.Templates()
+	tmpl := ""
+	found := false
+	if n, err := strconv.Atoi(ref); err == nil {
+		if n >= 1 && n <= len(tmpls) {
+			tmpl = tmpls[n-1].Template
+			found = true
+		}
+	} else {
+		for _, t := range tmpls {
+			if t.Name == ref {
+				tmpl = t.Template
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		return "", fmt.Errorf("unknown template %q", ref)
+	}
+	return naming.RenderTemplate(tmpl, vars)
 }
 
 // PlanRemoveAll returns the read-only preview of a kill-em-all run: every

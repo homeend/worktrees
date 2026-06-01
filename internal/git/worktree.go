@@ -6,6 +6,13 @@ func (r *Runner) AddWorktree(dir, path, branch, base string) error {
 	return err
 }
 
+// AddWorktreeExisting checks out an existing branch into a new worktree at path
+// (git worktree add <path> <branch>, no -b).
+func (r *Runner) AddWorktreeExisting(dir, path, branch string) error {
+	_, err := r.Run(dir, "worktree", "add", path, branch)
+	return err
+}
+
 // ListWorktrees returns parsed worktree entries for the repo containing dir.
 func (r *Runner) ListWorktrees(dir string) ([]WorktreeInfo, error) {
 	out, err := r.Run(dir, "worktree", "list", "--porcelain", "-z")

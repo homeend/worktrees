@@ -74,6 +74,74 @@ func TestResolveNames_ExplicitBranchHonoredWithPrefix(t *testing.T) {
 	}
 }
 
+func TestResolveTemplate_ByNameAndNumber(t *testing.T) {
+	cfg := fakeConfig{templates: []Template{
+		{Name: "autofix", Template: "autofix/{{.ticketName}}"},
+		{Name: "feature", Template: "feat/{{.ticketName}}"},
+	}}
+	m := New(newFakeGit("/repo"), newFakeHooks(), cfg)
+
+	byName, err := m.ResolveTemplate("autofix", map[string]string{"ticketName": "ZX-12"})
+	if err != nil || byName != "autofix/ZX-12" {
+		t.Fatalf("by name = %q, err=%v", byName, err)
+	}
+	byNum, err := m.ResolveTemplate("2", map[string]string{"ticketName": "ZX-12"})
+	if err != nil || byNum != "feat/ZX-12" {
+		t.Fatalf("by number = %q, err=%v", byNum, err)
+	}
+}
+
+func TestResolveTemplate_UnknownRefErrors(t *testing.T) {
+	m := New(newFakeGit("/repo"), newFakeHooks(), fakeConfig{})
+	if _, err := m.ResolveTemplate("nope", nil); err == nil {
+		t.Error("unknown template should error")
+	}
+	if _, err := m.ResolveTemplate("5", nil); err == nil {
+		t.Error("out-of-range index should error")
+	}
+}
+
+func TestTemplates_PassThrough(t *testing.T) {
+	cfg := fakeConfig{templates: []Template{{Name: "a", Template: "a/{{.x}}"}}}
+	m := New(newFakeGit("/repo"), newFakeHooks(), cfg)
+	if got := m.Templates(); len(got) != 1 || got[0].Name != "a" {
+		t.Errorf("Templates() = %+v", got)
+	}
+}
+
+func TestAdd_FromBranchChecksOutExisting(t *testing.T) {
+	m, g, h := newTestManager("/home/me/myrepo")
+	g.branches["feature/login"] = true // branch exists
+	res, err := m.Add(".", AddOptions{FromBranch: "feature/login"})
+	if err != nil {
+		t.Fatalf("Add from-branch: %v", err)
+	}
+	if res.Branch != "feature/login" {
+		t.Errorf("branch = %q, want feature/login (verbatim)", res.Branch)
+	}
+	if res.Name != "feature-login" {
+		t.Errorf("name = %q, want feature-login (sanitized dir)", res.Name)
+	}
+	if len(g.added) != 1 {
+		t.Errorf("expected one worktree added, got %v", g.added)
+	}
+	wantOrder := []HookEvent{PreCreate, PostCreate}
+	if len(h.calls) != 2 || h.calls[0] != wantOrder[0] || h.calls[1] != wantOrder[1] {
+		t.Errorf("hooks should still run: %v", h.calls)
+	}
+}
+
+func TestAdd_FromBranchMissingErrors(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	_, err := m.Add(".", AddOptions{FromBranch: "feature/missing"})
+	if err == nil {
+		t.Fatal("expected error when from-branch does not exist")
+	}
+	if len(g.added) != 0 {
+		t.Errorf("nothing should be added when branch missing, got %v", g.added)
+	}
+}
+
 func TestResolveNames_CustomPrefix(t *testing.T) {
 	m := New(newFakeGit("/repo"), newFakeHooks(), fakeConfig{branchPrefix: "feature/"})
 	_, branch, err := m.resolveNames(AddOptions{Name: "thing"})

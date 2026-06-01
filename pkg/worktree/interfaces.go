@@ -7,6 +7,7 @@ type GitRunner interface {
 	CheckRefFormat(branch string) error
 	BranchExists(dir, branch string) bool
 	AddWorktree(dir, path, branch, base string) error
+	AddWorktreeExisting(dir, path, branch string) error
 	ListWorktrees(dir string) ([]GitWorktree, error)
 	RemoveWorktree(dir, path string, force bool) error
 	DeleteBranch(dir, branch string, force bool) (bool, error)
@@ -58,4 +59,5 @@ type ConfigProvider interface {
 	Container() string    // "" => default sibling container
 	NameTemplate() string // "" => default generated name pattern
 	BranchPrefix() string // "" => caller falls back to default
+	Templates() []Template
 }
