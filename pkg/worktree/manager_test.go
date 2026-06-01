@@ -119,8 +119,8 @@ func TestAdd_FromBranchChecksOutExisting(t *testing.T) {
 	if res.Branch != "feature/login" {
 		t.Errorf("branch = %q, want feature/login (verbatim)", res.Branch)
 	}
-	if res.Name != "feature-login" {
-		t.Errorf("name = %q, want feature-login (sanitized dir)", res.Name)
+	if res.Name != "feature/login" {
+		t.Errorf("name = %q, want feature/login (branch w/o prefix)", res.Name)
 	}
 	if len(g.added) != 1 {
 		t.Errorf("expected one worktree added, got %v", g.added)
@@ -153,6 +153,35 @@ func TestResolveNames_CustomPrefix(t *testing.T) {
 	}
 }
 
+func TestResolveNames_NoPrefixAndOverride(t *testing.T) {
+	m := New(newFakeGit("/repo"), newFakeHooks(), fakeConfig{branchPrefix: "wt/"})
+
+	_, branch, err := m.resolveNames(AddOptions{Name: "autofix/X", NoPrefix: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "autofix/X" {
+		t.Errorf("--no-prefix branch = %q, want autofix/X", branch)
+	}
+
+	_, branch, err = m.resolveNames(AddOptions{Name: "autofix/X", PrefixOverride: "team/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "team/autofix/X" {
+		t.Errorf("override branch = %q, want team/autofix/X", branch)
+	}
+
+	// NoPrefix wins over an override.
+	_, branch, err = m.resolveNames(AddOptions{Name: "autofix/X", NoPrefix: true, PrefixOverride: "team/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "autofix/X" {
+		t.Errorf("NoPrefix should win, branch = %q, want autofix/X", branch)
+	}
+}
+
 func TestResolveNames_HonorsNameTemplate(t *testing.T) {
 	g := newFakeGit("/home/me/myrepo")
 	m := New(g, newFakeHooks(), fakeConfig{baseRef: "HEAD", branchPrefix: "wt/", nameTemplate: "{{.Adjective}}_{{.Noun}}"})
@@ -180,10 +209,10 @@ func TestResolveNames_InvalidTemplateErrors(t *testing.T) {
 	}
 }
 
-func TestWorktreePath_UsesSanitizedDir(t *testing.T) {
+func TestWorktreePath_MirrorsFullBranch(t *testing.T) {
 	m, _, _ := newTestManager("/home/me/myrepo")
 	got := m.worktreePath("/home/me/myrepo", "wt/feature/foo")
-	want := filepath.Join("/home/me/myrepo.worktrees", "feature-foo")
+	want := filepath.Join("/home/me/myrepo.worktrees", "wt", "feature", "foo")
 	if got != want {
 		t.Errorf("worktreePath = %q, want %q", got, want)
 	}

@@ -17,11 +17,13 @@ type Template struct {
 
 // AddOptions controls Add.
 type AddOptions struct {
-	Name       string // optional; generated if empty
-	Branch     string // optional; defaults to "wt/"+Name
-	BaseRef    string // optional; defaults to config BaseRef
-	NoHooks    bool
-	FromBranch string // when set: check out this existing branch instead of cutting a new one
+	Name           string // optional; generated if empty
+	Branch         string // optional; defaults to "wt/"+Name
+	BaseRef        string // optional; defaults to config BaseRef
+	NoHooks        bool
+	FromBranch     string // when set: check out this existing branch instead of cutting a new one
+	NoPrefix       bool   // skip the configured branch prefix
+	PrefixOverride string // override the configured prefix for this run (normalized; ignored if NoPrefix)
 }
 
 // AddResult reports the outcome of Add.

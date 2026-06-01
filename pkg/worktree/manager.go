@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -59,14 +60,28 @@ func (m *Manager) resolveNames(opts AddOptions) (name, branch string, err error)
 	if base == "" {
 		base = name
 	}
-	prefix := m.cfg.BranchPrefix()
+	prefix := m.effectivePrefix(opts)
 	branch = prefix + strings.TrimPrefix(base, prefix)
 	return name, branch, nil
 }
 
-// worktreePath returns the on-disk path for a branch within the container.
+// effectivePrefix resolves the branch prefix for this Add: --no-prefix wins and
+// yields none; otherwise a per-run override replaces the configured prefix.
+func (m *Manager) effectivePrefix(opts AddOptions) string {
+	if opts.NoPrefix {
+		return ""
+	}
+	if opts.PrefixOverride != "" {
+		return opts.PrefixOverride
+	}
+	return m.cfg.BranchPrefix()
+}
+
+// worktreePath returns the on-disk path for a branch within the container. The
+// directory mirrors the full branch ref (slashes become nested subdirectories,
+// prefix included).
 func (m *Manager) worktreePath(repoRoot, branch string) string {
-	return filepath.Join(m.containerPath(repoRoot), naming.SanitizeDir(branch, m.cfg.BranchPrefix()))
+	return filepath.Join(m.containerPath(repoRoot), filepath.FromSlash(branch))
 }
 
 func defaultDigits() int {
@@ -89,7 +104,7 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	var name, branch, baseRef string
 	if fromExisting {
 		branch = opts.FromBranch
-		name = naming.SanitizeDir(branch, m.cfg.BranchPrefix())
+		name = strings.TrimPrefix(branch, m.cfg.BranchPrefix())
 	} else {
 		name, branch, err = m.resolveNames(opts)
 		if err != nil {
@@ -196,20 +211,31 @@ func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
 	return out, nil
 }
 
-// resolveWorktree maps a user-supplied name to a worktree, matching by
-// directory basename first, then branch (with/without wt/ prefix). It refuses
-// the main worktree and errors on not-found.
+// resolveWorktree maps a user-supplied name to a worktree. Since the worktree
+// directory now mirrors the full branch (nested, prefixed), a name matches when
+// it equals the branch (with or without prefix), the container-relative path,
+// or the leaf directory name. It refuses the main worktree and errors on
+// not-found.
 func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 	list, err := m.List(dir)
 	if err != nil {
 		return WorktreeInfo{}, err
 	}
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return WorktreeInfo{}, err
+	}
+	container := m.containerPath(repoRoot)
 	prefix := m.cfg.BranchPrefix()
-	wantBranch := "refs/heads/" + prefix + strings.TrimPrefix(name, prefix)
+	nameNoPrefix := strings.TrimPrefix(name, prefix)
+	wantBranch := "refs/heads/" + prefix + nameNoPrefix
+	leaf := filepath.Base(filepath.FromSlash(name))
 	for _, w := range list {
-		byDir := filepath.Base(w.Path) == naming.SanitizeDir(name, prefix)
+		rel := filepath.ToSlash(strings.TrimPrefix(w.Path, container+string(filepath.Separator)))
 		byBranch := w.Branch == wantBranch || w.Branch == "refs/heads/"+name
-		if byDir || byBranch {
+		byPath := rel == name || rel == prefix+nameNoPrefix || rel == nameNoPrefix
+		byLeaf := filepath.Base(w.Path) == leaf
+		if byBranch || byPath || byLeaf {
 			if w.IsMain {
 				return WorktreeInfo{}, fmt.Errorf("%q is the main worktree and cannot be removed", name)
 			}
@@ -217,6 +243,18 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 		}
 	}
 	return WorktreeInfo{}, fmt.Errorf("no worktree matching %q", name)
+}
+
+// pruneEmptyParents removes now-empty parent directories of a removed worktree,
+// walking up to (but not including) the container. The first non-empty parent
+// (os.Remove fails) stops the walk.
+func (m *Manager) pruneEmptyParents(container, worktreePath string) {
+	for parent := filepath.Dir(worktreePath); parent != container &&
+		strings.HasPrefix(parent, container+string(filepath.Separator)); parent = filepath.Dir(parent) {
+		if err := os.Remove(parent); err != nil {
+			break
+		}
+	}
 }
 
 // Remove tears down a worktree: pre-remove hook -> git worktree remove ->
@@ -258,6 +296,7 @@ func (m *Manager) Remove(dir string, opts RemoveOptions) (RemoveResult, error) {
 	if err := m.git.RemoveWorktree(repoRoot, w.Path, opts.Force); err != nil {
 		return res, fmt.Errorf("git worktree remove: %w", err)
 	}
+	m.pruneEmptyParents(m.containerPath(repoRoot), w.Path)
 
 	if !opts.KeepBranch && branch != "" {
 		deleted, err := m.git.DeleteBranch(repoRoot, branch, opts.ForceBranch)

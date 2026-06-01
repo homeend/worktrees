@@ -6,15 +6,18 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/code-drill/wt/internal/config"
 	"github.com/code-drill/wt/pkg/worktree"
 )
 
 var (
-	newBranch     string
-	newBase       string
-	newNoHooks    bool
-	newTemplate   string
-	newFromBranch string
+	newBranch       string
+	newBase         string
+	newNoHooks      bool
+	newTemplate     string
+	newFromBranch   string
+	newNoPrefix     bool
+	newBranchPrefix string
 )
 
 // worktreeAddOptions builds AddOptions from flag values (extracted for testing).
@@ -44,7 +47,7 @@ func parseVars(args []string) (map[string]string, error) {
 
 // buildAddOptions resolves new's flags/args into AddOptions. --template,
 // --from-branch, and --branch are mutually exclusive (each defines the branch).
-func buildAddOptions(r addResolver, args []string, tmpl, fromBranch, branch, base string, noHooks bool) (worktree.AddOptions, error) {
+func buildAddOptions(r addResolver, args []string, tmpl, fromBranch, branch, base string, noHooks, noPrefix bool, prefixOverride string) (worktree.AddOptions, error) {
 	set := 0
 	for _, s := range []string{tmpl, fromBranch, branch} {
 		if s != "" {
@@ -56,6 +59,10 @@ func buildAddOptions(r addResolver, args []string, tmpl, fromBranch, branch, bas
 	}
 
 	opts := worktreeAddOptions("", branch, base, noHooks)
+	opts.NoPrefix = noPrefix
+	if !noPrefix {
+		opts.PrefixOverride = config.NormalizePrefix(prefixOverride)
+	}
 	switch {
 	case fromBranch != "":
 		if len(args) > 0 {
@@ -92,7 +99,7 @@ var newCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		opts, err := buildAddOptions(m, args, newTemplate, newFromBranch, newBranch, newBase, newNoHooks)
+		opts, err := buildAddOptions(m, args, newTemplate, newFromBranch, newBranch, newBase, newNoHooks, newNoPrefix, newBranchPrefix)
 		if err != nil {
 			return err
 		}
@@ -111,5 +118,7 @@ func init() {
 	newCmd.Flags().BoolVar(&newNoHooks, "no-hooks", false, "skip lifecycle hooks")
 	newCmd.Flags().StringVarP(&newTemplate, "template", "t", "", "render the branch from a named/numbered template")
 	newCmd.Flags().StringVar(&newFromBranch, "from-branch", "", "create a worktree from an existing local branch")
+	newCmd.Flags().BoolVar(&newNoPrefix, "no-prefix", false, "do not prepend the configured branch prefix")
+	newCmd.Flags().StringVar(&newBranchPrefix, "branch-prefix", "", "override the branch prefix for this run (empty disables; --no-prefix wins)")
 	rootCmd.AddCommand(newCmd)
 }

@@ -70,6 +70,31 @@ func newRealRepo(t *testing.T) string {
 	return dir
 }
 
+func TestManager_NestedLayoutAndPrune_RealGit(t *testing.T) {
+	repo := newRealRepo(t)
+	m := New(gitAdapter{git.New()}, noopHooks{}, staticCfg{})
+
+	res, err := m.Add(repo, AddOptions{Name: "autofix/MTRH-2132", NoHooks: true})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	container := repo + ".worktrees"
+	wantPath := filepath.Join(container, "wt", "autofix", "MTRH-2132")
+	if res.Path != wantPath {
+		t.Fatalf("path = %q, want %q (mirror full branch)", res.Path, wantPath)
+	}
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Fatalf("nested worktree dir not created: %v", err)
+	}
+
+	if _, err := m.Remove(repo, RemoveOptions{Name: "autofix/MTRH-2132", NoHooks: true}); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(container, "wt")); !os.IsNotExist(err) {
+		t.Errorf("empty parent dirs should be pruned up to the container")
+	}
+}
+
 func TestManager_AddListRemove_RealGit(t *testing.T) {
 	repo := newRealRepo(t)
 	m := New(gitAdapter{git.New()}, noopHooks{}, staticCfg{})

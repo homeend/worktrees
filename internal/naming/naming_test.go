@@ -38,18 +38,6 @@ func TestGenerate_NonNegativeAndWellFormedForEdgeDigits(t *testing.T) {
 	}
 }
 
-func TestSanitizeDir_StripsPrefixAndSlashes(t *testing.T) {
-	if got := SanitizeDir("wt/feature/foo", "wt/"); got != "feature-foo" {
-		t.Errorf("SanitizeDir = %q, want feature-foo", got)
-	}
-	if got := SanitizeDir("plain", "wt/"); got != "plain" {
-		t.Errorf("SanitizeDir = %q, want plain", got)
-	}
-	if got := SanitizeDir("feature/x", "feature/"); got != "x" {
-		t.Errorf("SanitizeDir custom prefix = %q, want x", got)
-	}
-}
-
 func TestGenerateFrom_EmptyTemplateMatchesGenerate(t *testing.T) {
 	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
 	got, err := GenerateFrom("", ts, 4821)

@@ -69,9 +69,3 @@ func RenderTemplate(tmpl string, vars map[string]string) (string, error) {
 	return b.String(), nil
 }
 
-// SanitizeDir converts a branch-style name into a filesystem-safe directory
-// name: strips the given branch prefix and replaces remaining slashes with "-".
-func SanitizeDir(name, prefix string) string {
-	name = strings.TrimPrefix(name, prefix)
-	return strings.ReplaceAll(name, "/", "-")
-}
