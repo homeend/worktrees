@@ -8,10 +8,11 @@ import (
 
 // Sentinel errors mapped to stable process exit codes.
 var (
-	ErrNotARepo      = errors.New("not a git repository")
-	ErrNameCollision = errors.New("name collision")
-	ErrHookFailed    = errors.New("hook failed")
-	ErrDirtyWorktree = errors.New("worktree has uncommitted changes")
+	ErrNotARepo       = errors.New("not a git repository")
+	ErrNameCollision  = errors.New("name collision")
+	ErrHookFailed     = errors.New("hook failed")
+	ErrDirtyWorktree  = errors.New("worktree has uncommitted changes")
+	ErrPartialCleanup = errors.New("cleanup completed with failures")
 )
 
 // classify inspects an error's message for known failure signatures and wraps it
@@ -47,6 +48,8 @@ func exitCodeFor(err error) int {
 		return 4
 	case errors.Is(err, ErrDirtyWorktree):
 		return 5
+	case errors.Is(err, ErrPartialCleanup):
+		return 6
 	default:
 		return 1
 	}
