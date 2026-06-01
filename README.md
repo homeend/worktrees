@@ -124,6 +124,8 @@ Keys:
 |-----------|-----------------------------------------------------|
 | `↑`/`↓` (or `k`/`j`) | move the cursor                          |
 | `n`       | create a new worktree (auto-generated name)         |
+| `b`       | create a worktree from an existing branch (type the branch name, Enter) |
+| `t`       | view configured branch templates                    |
 | `d`       | delete the selected worktree (asks `y`/`n` to confirm; the main worktree is refused) |
 | `K`       | **kill-em-all** — remove every worktree and prefixed branch (asks `y`/`n`; hooks skipped) |
 | `q` / `Ctrl+C` | quit                                           |
@@ -147,11 +149,14 @@ always find it.
 
 ```
 wt new [name]        Create a worktree (generated name if omitted)
+wt new -t <ref> k:v  Create from a named/numbered template (var:value pairs)
+wt new --from-branch Create a worktree from an existing local branch
 wt list | wt ls      List worktrees (--json for machine output)
 wt rm <name>         Remove a worktree and its branch
 wt path <name>       Print a worktree's absolute path
 wt prune             Clear stale worktree state (git worktree prune)
 wt set <key> <val>   Set a config value (e.g. branch_prefix); --safe
+wt templates         List configured branch templates
 wt kill-em-all       Remove ALL worktrees + prefixed branches (--yes)
 wt init              Scaffold .worktrees/ (config + hook stubs)
 wt completion <sh>   Generate shell completion (bash|zsh|fish|powershell)
@@ -164,7 +169,9 @@ Common flags:
   Works with every command.
 - `wt new`: `-b/--branch <name>` (branch name; default derived from the name),
   `--base <ref>` (ref to branch from; default config `base_ref` / `HEAD`),
-  `--no-hooks`.
+  `-t/--template <ref>` (render the branch from a template — see below),
+  `--from-branch <branch>` (check out an existing local branch), `--no-hooks`.
+  `--template`, `--from-branch`, and `--branch` are mutually exclusive.
 - `wt rm`: `--force` (remove a worktree with uncommitted changes),
   `-D/--force-branch` (force-delete an unmerged branch),
   `--keep-branch` (keep the branch), `--no-hooks`.
@@ -198,6 +205,42 @@ worktree and any non-prefixed branch (e.g. `main`) are never touched.
 ```sh
 wt kill-em-all          # prompts for confirmation
 wt kill-em-all --yes    # no prompt (for scripts)
+```
+
+### Creating from a template
+
+Define reusable branch templates in `.worktrees/config.yaml` and select one at
+`new` time by **name or 1-based number**, filling variables with `name:value`
+pairs. Templates are Go `text/template` strings (`{{.var}}`); a missing variable
+is an error. The rendered string is appended to the configured branch prefix.
+
+```yaml
+# .worktrees/config.yaml
+templates:
+  - name: autofix
+    template: "autofix/{{.ticketName}}"
+  - name: feature
+    template: "feat/{{.ticketName}}"
+```
+
+```sh
+wt templates                              # list them (index, name, template)
+wt new -t autofix ticketName:ZXXXX-12121  # branch <prefix>autofix/ZXXXX-12121
+wt new -t 1 ticketName:ZXXXX-12121        # same template, by number
+```
+
+With prefix `mrutkowski/`, that yields branch `mrutkowski/autofix/ZXXXX-12121`
+and worktree dir `autofix-ZXXXX-12121`.
+
+### Creating from an existing branch
+
+`wt new --from-branch <branch>` (or the TUI `b` key) checks out an existing
+**local** branch into a new worktree and runs the lifecycle hooks, so the
+workspace is initialized just like a fresh `wt new`. It does not create a new
+branch; if the branch doesn't exist locally, it errors.
+
+```sh
+wt new --from-branch feature/login
 ```
 
 ---

@@ -15,6 +15,9 @@ const configTemplate = `# wt configuration. CLI flags override these values.
 #                         #   {{.Date}} {{.Adjective}} {{.Noun}} {{.Digits}}
 #                         # e.g. "{{.Date}}-{{.Adjective}}-{{.Noun}}-{{.Digits}}"
 # branch_prefix: "wt/"    # prefix for branches created by 'wt new' (env: WT_BRANCH_PREFIX)
+# templates:               # named branch templates for 'wt new -t <name|number>'
+#   - name: autofix        #   vars are Go text/template fields, e.g. {{.ticketName}}
+#     template: "autofix/{{.ticketName}}"
 `
 
 const hookTemplate = `#!/usr/bin/env bash

@@ -67,6 +67,19 @@ Last verified against the codebase: 2026-06-01.
   generated names are rendered from it (Go `text/template`, fields `{{.Date}}`,
   `{{.Adjective}}`, `{{.Noun}}`, `{{.Digits}}`). An invalid template fails the
   command with a clear message rather than producing a malformed name.
+- **FR-4.7 (named templates).** `wt new -t <ref>` selects a configured template
+  (see §9) by **name** or **1-based number**, rendering it (Go `text/template`)
+  against `name:value` variables given as positional args; a referenced-but-
+  missing variable, an unknown ref, or a malformed `name:value` token is an
+  error. The rendered string is used as the worktree name, so the configured
+  branch prefix is prepended (e.g. template `autofix/{{.ticketName}}` + prefix
+  `mrutkowski/` + `ticketName:ZX-12` → branch `mrutkowski/autofix/ZX-12`).
+  `--template`, `--from-branch`, and `--branch` are mutually exclusive.
+- **FR-4.8 (from existing branch).** `wt new --from-branch <branch>` checks out
+  an existing **local** branch into a new worktree instead of cutting a new one
+  (error if the branch does not exist locally; remote-only is not resolved). No
+  new branch is created; lifecycle hooks run as for any `new`. The directory name
+  derives from the branch via the usual prefix-strip + slash-sanitize.
 
 ## 5. CLI commands
 
@@ -102,6 +115,8 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
   an unknown key or empty value is an error. `--safe` refuses to overwrite an
   existing **different** value (an equal value is a no-op success).
 - **FR-5.10 `wt kill-em-all`** — destructive bulk cleanup (§6.6).
+- **FR-5.11 `wt templates`** — list configured templates (1-based index, name,
+  template string); prints "no templates defined" when none are configured.
 
 ## 6. Removal semantics
 
@@ -176,7 +191,8 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
   additionally has an environment layer — see FR-9.5.)
 - **FR-9.2 (keys).** `base_ref` (default `HEAD`), `container` (default empty →
   sibling container; used verbatim when set), `name_template` (default empty →
-  built-in date-first pattern), `branch_prefix` (default `wt/`; see FR-9.5).
+  built-in date-first pattern), `branch_prefix` (default `wt/`; see FR-9.5),
+  `templates` (a list of `{name, template}`; see FR-4.7).
 - **FR-9.4 (`wt set`).** `wt set <key> <value>` persists a key to the config
   file via a comment-preserving upsert (creating `.worktrees/config.yaml` if
   absent). Only `branch_prefix` is valid today. `--safe` errors when a
@@ -207,6 +223,12 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
 - **FR-10.4a (kill-em-all — `K`).** Pressing `K` shows an inline confirmation
   (counting the worktrees and noting hooks are skipped); `y` runs
   `wt kill-em-all --yes`, `n`/`Esc` cancels (§6.6).
+- **FR-10.4b (from-branch — `b`).** Pressing `b` opens a single-line text input;
+  typing a branch name and pressing Enter runs `wt new --from-branch <name>`
+  (empty input or `Esc` cancels). This is the TUI's text-entry mode (§4.8).
+- **FR-10.4c (templates — `t`).** Pressing `t` shows a read-only list of
+  configured templates; any key returns to the list (§4.7). Creating *from* a
+  template is CLI-only.
 - **FR-10.5 (action execution).** Create/delete in the TUI perform the **same**
   operations as `wt new` / `wt rm`, including running hooks. The TUI hands the
   terminal over for the action so hook output and any interactive prompts
