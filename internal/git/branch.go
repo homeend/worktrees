@@ -1,5 +1,24 @@
 package git
 
+import "strings"
+
+// ListBranches returns the short names of local branches whose name starts with
+// prefix (e.g. "wt/"). An empty prefix matches all local branches.
+func (r *Runner) ListBranches(dir, prefix string) ([]string, error) {
+	out, err := r.Run(dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/"+prefix+"*")
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
 // BranchExists reports whether refs/heads/<branch> exists. It collapses any
 // verification failure (including operational git errors) to false; callers
 // that need to distinguish "absent" from "git failed" should not rely on it.

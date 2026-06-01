@@ -113,6 +113,29 @@ func TestWorktree_AddListRemovePrune(t *testing.T) {
 	}
 }
 
+func TestListBranches_FiltersByPrefix(t *testing.T) {
+	repo := newTestRepo(t)
+	r := New()
+	for _, b := range []string{"wt/alpha", "wt/beta", "feature/keep"} {
+		if _, err := r.Run(repo, "branch", b); err != nil {
+			t.Fatalf("setup branch %s: %v", b, err)
+		}
+	}
+	got, err := r.ListBranches(repo, "wt/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"wt/alpha": true, "wt/beta": true}
+	if len(got) != 2 {
+		t.Fatalf("ListBranches = %v, want 2 wt/ branches", got)
+	}
+	for _, b := range got {
+		if !want[b] {
+			t.Errorf("unexpected branch %q in result", b)
+		}
+	}
+}
+
 func TestBranch_ExistsAndDelete(t *testing.T) {
 	r := New()
 	repo := newTestRepo(t)
