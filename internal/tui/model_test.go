@@ -144,6 +144,41 @@ func TestDelete_RefusesMainWorktree(t *testing.T) {
 	}
 }
 
+func TestKillAll_KeyEntersConfirm(t *testing.T) {
+	m, _ := newTestModel(sample())
+	updated, _ := m.Update(key("K"))
+	if updated.(model).mode != modeConfirmKillAll {
+		t.Errorf("mode = %v, want modeConfirmKillAll", updated.(model).mode)
+	}
+}
+
+func TestKillAll_ConfirmYesDispatches(t *testing.T) {
+	m, rec := newTestModel(sample())
+	conf, _ := m.Update(key("K"))
+	done, cmd := conf.(model).Update(key("y"))
+	if cmd == nil {
+		t.Fatal("y should return an action command")
+	}
+	if done.(model).mode != modeNormal {
+		t.Errorf("mode should return to normal after confirm")
+	}
+	if len(*rec) != 1 || (*rec)[0] != "kill-em-all --yes --repo /repo" {
+		t.Errorf("runAction = %v, want [kill-em-all --yes --repo /repo]", *rec)
+	}
+}
+
+func TestKillAll_ConfirmNoCancels(t *testing.T) {
+	m, rec := newTestModel(sample())
+	conf, _ := m.Update(key("K"))
+	cancel, _ := conf.(model).Update(key("n"))
+	if cancel.(model).mode != modeNormal {
+		t.Errorf("n should cancel back to normal mode")
+	}
+	if len(*rec) != 0 {
+		t.Errorf("cancel should run no action, got %v", *rec)
+	}
+}
+
 func TestActionFinished_TriggersReload(t *testing.T) {
 	m, _ := newTestModel(sample())
 	_, cmd := m.Update(actionFinishedMsg{})

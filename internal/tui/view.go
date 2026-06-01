@@ -33,8 +33,17 @@ func (m model) View() string {
 		if it, ok := m.current(); ok {
 			b.WriteString(promptStyle.Render(fmt.Sprintf("Delete %s? (y/n)", filepath.Base(it.Path))) + "\n")
 		}
+	case modeConfirmKillAll:
+		n := 0
+		for _, it := range m.items {
+			if !it.IsMain {
+				n++
+			}
+		}
+		b.WriteString(promptStyle.Render(
+			fmt.Sprintf("Remove ALL %d worktrees and their branches? Hooks skipped. (y/n)", n)) + "\n")
 	default:
-		b.WriteString("↑/↓ move • n new • d delete • q quit\n")
+		b.WriteString("↑/↓ move • n new • d delete • K kill-all • q quit\n")
 	}
 
 	if m.status != "" {

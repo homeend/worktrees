@@ -19,6 +19,7 @@ type mode int
 const (
 	modeNormal mode = iota
 	modeConfirmDelete
+	modeConfirmKillAll
 )
 
 // lister is the subset of *worktree.Manager the TUI needs to refresh its view.
@@ -174,8 +175,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.reloadCmd()
 	case tea.KeyMsg:
-		if m.mode == modeConfirmDelete {
+		switch m.mode {
+		case modeConfirmDelete:
 			return m.updateConfirm(msg)
+		case modeConfirmKillAll:
+			return m.updateConfirmKillAll(msg)
 		}
 		return m.updateNormal(msg)
 	}
@@ -218,6 +222,22 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = modeConfirmDelete
 		m.status = ""
+	case "K":
+		m.mode = modeConfirmKillAll
+		m.status = ""
+	}
+	return m, nil
+}
+
+func (m model) updateConfirmKillAll(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		m.mode = modeNormal
+		m.status = "removing all worktrees…"
+		return m, m.runAction("kill-em-all", "--yes", "--repo", m.dir)
+	case "n", "N", "esc":
+		m.mode = modeNormal
+		return m, nil
 	}
 	return m, nil
 }
