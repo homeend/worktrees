@@ -3,9 +3,12 @@
 `wt` creates, lists, and removes git worktrees in a sibling container, with
 lifecycle hooks for copying gitignored files (like `.env`) into new worktrees.
 
-Worktrees are placed at `<repo>.worktrees/<name>/`. Branches are prefixed `wt/`.
-Generated names are date-first (`YYYY-MM-DD_HH-mm-<adjective>-<noun>-NNNN`) so
-they sort chronologically and stale branches are easy to spot.
+Each worktree's directory **mirrors its full branch** under
+`<repo>.worktrees/` (slashes become nested subdirectories), so branch
+`wt/2026-…-foo` lives at `<repo>.worktrees/wt/2026-…-foo`. Branches are prefixed
+`wt/` by default. Generated names are date-first
+(`YYYY-MM-DD_HH-mm-<adjective>-<noun>-NNNN`) so they sort chronologically and
+stale branches are easy to spot.
 
 ## Requirements
 
@@ -170,7 +173,9 @@ Common flags:
 - `wt new`: `-b/--branch <name>` (branch name; default derived from the name),
   `--base <ref>` (ref to branch from; default config `base_ref` / `HEAD`),
   `-t/--template <ref>` (render the branch from a template — see below),
-  `--from-branch <branch>` (check out an existing local branch), `--no-hooks`.
+  `--from-branch <branch>` (check out an existing local branch), `--no-hooks`,
+  `--no-prefix` (don't prepend the configured prefix), `--branch-prefix <value>`
+  (override the prefix for this run; `--no-prefix` wins).
   `--template`, `--from-branch`, and `--branch` are mutually exclusive.
 - `wt rm`: `--force` (remove a worktree with uncommitted changes),
   `-D/--force-branch` (force-delete an unmerged branch),
@@ -230,7 +235,9 @@ wt new -t 1 ticketName:ZXXXX-12121        # same template, by number
 ```
 
 With prefix `mrutkowski/`, that yields branch `mrutkowski/autofix/ZXXXX-12121`
-and worktree dir `autofix-ZXXXX-12121`.
+and worktree dir `<repo>.worktrees/mrutkowski/autofix/ZXXXX-12121` (the directory
+mirrors the full branch). Use `--no-prefix` to skip the prefix, or
+`--branch-prefix <value>` to override it for one run.
 
 ### Creating from an existing branch
 

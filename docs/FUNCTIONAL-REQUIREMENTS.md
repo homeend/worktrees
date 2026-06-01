@@ -38,9 +38,12 @@ Last verified against the codebase: 2026-06-01.
 - **FR-3.1 (main-repo anchoring).** All paths anchor to the **main** working
   tree, even when `wt` is invoked from inside a linked worktree. Running `wt`
   from a worktree must not nest containers.
-- **FR-3.2 (container).** New worktrees live in a **sibling container** of the
-  main repo root named `<repo>.worktrees/`. Each worktree is
-  `<repo>.worktrees/<dir-name>/`.
+- **FR-3.2 (container & layout).** New worktrees live in a **sibling container**
+  of the main repo root named `<repo>.worktrees/`. Each worktree's directory
+  **mirrors its full branch ref**: `<repo>.worktrees/<branch>/`, with the
+  branch's `/` becoming nested subdirectories and the prefix included (e.g.
+  branch `mrutkowski/autofix/X` → `<repo>.worktrees/mrutkowski/autofix/X`). The
+  default-prefix case nests too (branch `wt/<gen>` → `<repo>.worktrees/wt/<gen>`).
 - **FR-3.3 (container override).** If `container` is configured (see §9), that
   path is used **verbatim** (absolute, or relative to the repo root) — the
   `<repo>.worktrees` default is not applied on top of it.
@@ -55,9 +58,11 @@ Last verified against the codebase: 2026-06-01.
   **configured branch prefix** (default `wt/`; see FR-9.5). This applies to
   generated **and** user-supplied names/branches. Re-supplying an
   already-prefixed value must not double-prefix it.
-- **FR-4.3 (worktree directory name).** The on-disk directory name is the name
-  **without** the configured prefix, sanitized so it contains no `/` (e.g. with
-  prefix `wt/`, branch `wt/feature/foo` → directory `feature-foo`).
+- **FR-4.3 (worktree directory path).** The on-disk path mirrors the **full
+  branch ref** under the container — slashes become nested subdirectories and
+  the prefix is included (e.g. branch `wt/feature/foo` →
+  `<container>/wt/feature/foo`). Git ref validity (FR-4.4) guarantees the path
+  is filesystem-safe.
 - **FR-4.4 (branch validity).** The final branch name is validated as a legal
   git ref before use; an invalid name fails the command.
 - **FR-4.5 (base ref).** A new branch is cut from the configured `base_ref`
@@ -78,8 +83,12 @@ Last verified against the codebase: 2026-06-01.
 - **FR-4.8 (from existing branch).** `wt new --from-branch <branch>` checks out
   an existing **local** branch into a new worktree instead of cutting a new one
   (error if the branch does not exist locally; remote-only is not resolved). No
-  new branch is created; lifecycle hooks run as for any `new`. The directory name
-  derives from the branch via the usual prefix-strip + slash-sanitize.
+  new branch is created; lifecycle hooks run as for any `new`. The directory
+  path mirrors the branch (FR-4.3).
+- **FR-4.9 (per-run prefix controls).** `wt new --no-prefix` creates the branch
+  without the configured prefix; `wt new --branch-prefix <value>` overrides the
+  prefix for that run (normalized with a trailing `/`; empty disables). If both
+  are given, `--no-prefix` wins. They do not apply to `--from-branch` (verbatim).
 
 ## 5. CLI commands
 
@@ -120,9 +129,10 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
 
 ## 6. Removal semantics
 
-- **FR-6.1 (resolution).** `<name>` resolves against the actual worktree list:
-  by container-directory basename first, then by branch (with or without the
-  configured prefix). Not-found is an error.
+- **FR-6.1 (resolution).** `<name>` resolves against the actual worktree list,
+  matching by branch (with or without the configured prefix), by the
+  container-relative directory path, or by the leaf directory name. The full
+  branch ref is the unambiguous identifier; not-found is an error.
 - **FR-6.2 (refuse main).** The main worktree can never be removed.
 - **FR-6.3 (dirty worktree).** Removal refuses a worktree with uncommitted
   changes unless `--force`; the message explains how to override (exit code 5).
@@ -133,6 +143,9 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
   This is non-fatal.
 - **FR-6.5 (force / keep).** `--force-branch` (`-D`) force-deletes an unmerged
   branch; `--keep-branch` never deletes the branch.
+- **FR-6.7 (prune empty parents).** After a worktree is removed, now-empty parent
+  directories created by the mirrored layout (FR-3.2) are pruned up to — but not
+  including — the container. A still-populated parent stops the prune.
 - **FR-6.6 (kill-em-all — bulk cleanup).** `wt kill-em-all` force-removes **every
   non-main worktree** in the container **and** force-deletes **every branch
   matching the configured prefix** (incl. orphan branches with no worktree).
