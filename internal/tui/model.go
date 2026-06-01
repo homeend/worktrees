@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -20,6 +21,8 @@ const (
 	modeNormal mode = iota
 	modeConfirmDelete
 	modeConfirmKillAll
+	modeInputBranch
+	modeTemplates
 )
 
 // lister is the subset of *worktree.Manager the TUI needs to refresh its view.
@@ -42,12 +45,14 @@ type reloadMsg struct {
 }
 
 type model struct {
-	store  lister
-	dir    string
-	items  []worktree.WorktreeInfo
-	cursor int
-	mode   mode
-	status string
+	store     lister
+	dir       string
+	items     []worktree.WorktreeInfo
+	templates []worktree.Template
+	cursor    int
+	mode      mode
+	status    string
+	input     string
 
 	// runAction launches a `wt` subcommand in the foreground, handing the
 	// terminal over so hook output renders cleanly, then reports completion.
@@ -55,8 +60,8 @@ type model struct {
 	runAction func(args ...string) tea.Cmd
 }
 
-func newModel(store lister, dir string, items []worktree.WorktreeInfo) model {
-	return model{store: store, dir: dir, items: items, runAction: defaultRunAction}
+func newModel(store lister, dir string, items []worktree.WorktreeInfo, templates []worktree.Template) model {
+	return model{store: store, dir: dir, items: items, templates: templates, runAction: defaultRunAction}
 }
 
 // loggedExec adapts an *exec.Cmd to tea.ExecCommand. The Bubble Tea runtime
@@ -180,6 +185,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfirm(msg)
 		case modeConfirmKillAll:
 			return m.updateConfirmKillAll(msg)
+		case modeInputBranch:
+			return m.updateInputBranch(msg)
+		case modeTemplates:
+			return m.updateTemplates(msg)
 		}
 		return m.updateNormal(msg)
 	}
@@ -225,7 +234,51 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "K":
 		m.mode = modeConfirmKillAll
 		m.status = ""
+	case "b":
+		m.mode = modeInputBranch
+		m.input = ""
+		m.status = ""
+	case "t":
+		m.mode = modeTemplates
+		m.status = ""
 	}
+	return m, nil
+}
+
+func (m model) updateInputBranch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		branch := strings.TrimSpace(m.input)
+		m.mode = modeNormal
+		m.input = ""
+		if branch == "" {
+			return m, nil
+		}
+		m.status = "creating from " + branch + "…"
+		return m, m.runAction("new", "--from-branch", branch, "--repo", m.dir)
+	case tea.KeyEsc:
+		m.mode = modeNormal
+		m.input = ""
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.input) > 0 {
+			m.input = m.input[:len(m.input)-1]
+		}
+		return m, nil
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyRunes:
+		m.input += string(msg.Runes)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m model) updateTemplates(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	m.mode = modeNormal
 	return m, nil
 }
 

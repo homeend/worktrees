@@ -24,7 +24,7 @@ func (f *fakeLister) List(string) ([]worktree.WorktreeInfo, error) {
 // spawning a subprocess.
 func newTestModel(items []worktree.WorktreeInfo) (model, *[]string) {
 	rec := &[]string{}
-	m := newModel(&fakeLister{items: items}, "/repo", items)
+	m := newModel(&fakeLister{items: items}, "/repo", items, nil)
 	m.runAction = func(args ...string) tea.Cmd {
 		*rec = append(*rec, strings.Join(args, " "))
 		return func() tea.Msg { return actionFinishedMsg{} }
@@ -78,7 +78,7 @@ func TestView_RendersBranches(t *testing.T) {
 }
 
 func TestView_EmptyListStillRenders(t *testing.T) {
-	m := newModel(&fakeLister{}, "/repo", nil)
+	m := newModel(&fakeLister{}, "/repo", nil, nil)
 	if m.View() == "" {
 		t.Fatal("view should render even with no worktrees")
 	}
@@ -176,6 +176,68 @@ func TestKillAll_ConfirmNoCancels(t *testing.T) {
 	}
 	if len(*rec) != 0 {
 		t.Errorf("cancel should run no action, got %v", *rec)
+	}
+}
+
+func TestFromBranch_KeyEntersInput(t *testing.T) {
+	m, _ := newTestModel(sample())
+	updated, _ := m.Update(key("b"))
+	if updated.(model).mode != modeInputBranch {
+		t.Errorf("mode = %v, want modeInputBranch", updated.(model).mode)
+	}
+}
+
+func TestFromBranch_TypeAndEnterDispatches(t *testing.T) {
+	m, rec := newTestModel(sample())
+	cur := tea.Model(m)
+	cur, _ = cur.Update(key("b"))
+	for _, ch := range []string{"f", "e", "a", "t"} {
+		cur, _ = cur.Update(key(ch))
+	}
+	done, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter should dispatch an action")
+	}
+	if done.(model).mode != modeNormal {
+		t.Errorf("mode should return to normal after Enter")
+	}
+	if len(*rec) != 1 || (*rec)[0] != "new --from-branch feat --repo /repo" {
+		t.Errorf("runAction = %v, want [new --from-branch feat --repo /repo]", *rec)
+	}
+}
+
+func TestFromBranch_EscCancels(t *testing.T) {
+	m, rec := newTestModel(sample())
+	cur, _ := m.Update(key("b"))
+	cur, _ = cur.(model).Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cur.(model).mode != modeNormal {
+		t.Errorf("Esc should cancel to normal mode")
+	}
+	if len(*rec) != 0 {
+		t.Errorf("cancel should run no action, got %v", *rec)
+	}
+}
+
+func TestTemplates_KeyShowsList(t *testing.T) {
+	m, _ := newTestModel(sample())
+	m.templates = []worktree.Template{{Name: "autofix", Template: "autofix/{{.t}}"}}
+	updated, _ := m.Update(key("t"))
+	mm := updated.(model)
+	if mm.mode != modeTemplates {
+		t.Fatalf("mode = %v, want modeTemplates", mm.mode)
+	}
+	if !strings.Contains(mm.View(), "autofix") {
+		t.Errorf("templates view should list 'autofix':\n%s", mm.View())
+	}
+}
+
+func TestTemplates_AnyKeyReturns(t *testing.T) {
+	m, _ := newTestModel(sample())
+	m.templates = []worktree.Template{{Name: "autofix", Template: "autofix/{{.t}}"}}
+	shown, _ := m.Update(key("t"))
+	back, _ := shown.(model).Update(key("x"))
+	if back.(model).mode != modeNormal {
+		t.Errorf("any key should return to normal mode")
 	}
 }
 

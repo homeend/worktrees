@@ -17,7 +17,7 @@ func Run(m *worktree.Manager, dir string) error {
 	// terminal handover for create/delete actions (tea.Exec) leave and re-enter
 	// the alt buffer, so live hook output shows on the normal screen and the
 	// TUI's own frame is never left half-drawn on exit.
-	p := tea.NewProgram(newModel(m, dir, items), tea.WithAltScreen())
+	p := tea.NewProgram(newModel(m, dir, items, m.Templates()), tea.WithAltScreen())
 	_, err = p.Run()
 	return err
 }
