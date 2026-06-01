@@ -146,12 +146,14 @@ Add to the `GitRunner` interface, `gitAdapter`, and both git fakes
 - Flags: `-t, --template <ref>` and `--from-branch <branch>` (no short — `-b` is
   taken by `--branch`).
 - `Args` becomes `cobra.ArbitraryArgs`; validation in `RunE`:
-  - `--template` **and** `--from-branch` together → error.
+  - `--template`, `--from-branch`, and `--branch` are **mutually exclusive** —
+    each fully defines the branch, so at most one may be set (else error).
   - `--template` set → positionals are `name:value` pairs (parsed via a
     `parseVars` helper using `SplitN(s, ":", 2)`; empty key or no colon → error);
     the rendered template is the `Name`.
   - `--from-branch` set → no positional name; `FromBranch` is passed through.
-  - neither → at most one positional `name` (current behavior).
+  - neither → at most one positional `name` (current behavior); `--branch` may
+    set the new branch name as today.
 
 ### 8. `cmd/wt/templates.go` (new)
 
@@ -194,8 +196,8 @@ wt templates   (TUI: t)  ->  index name template
 | Unknown template ref (bad name / out-of-range index) | error: list valid refs |
 | Missing template variable | error from `missingkey=error` |
 | Malformed `k:v` (no colon / empty key) | error with the offending token |
-| `--template` + `--from-branch` together | error (mutually exclusive) |
-| `--from-branch` branch not found locally | error before any worktree/hook |
+| Two+ of `--template` / `--from-branch` / `--branch` set | error (mutually exclusive) |
+| `--from-branch` branch not found **locally** (`BranchExists` false) | error before any worktree/hook (remote-only not resolved) |
 | rendered branch invalid as a git ref | existing `CheckRefFormat` error |
 
 ## Testing
