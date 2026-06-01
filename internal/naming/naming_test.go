@@ -81,3 +81,25 @@ func TestGenerateFrom_InvalidTemplateErrors(t *testing.T) {
 		t.Error("malformed template should error")
 	}
 }
+
+func TestRenderTemplate_Renders(t *testing.T) {
+	got, err := RenderTemplate("autofix/{{.ticketName}}", map[string]string{"ticketName": "ZX-12"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "autofix/ZX-12" {
+		t.Errorf("RenderTemplate = %q, want autofix/ZX-12", got)
+	}
+}
+
+func TestRenderTemplate_MissingVarErrors(t *testing.T) {
+	if _, err := RenderTemplate("{{.nope}}", map[string]string{}); err == nil {
+		t.Error("missing variable should error")
+	}
+}
+
+func TestRenderTemplate_InvalidTemplateErrors(t *testing.T) {
+	if _, err := RenderTemplate("{{.x", nil); err == nil {
+		t.Error("malformed template should error")
+	}
+}

@@ -240,3 +240,36 @@ func TestSet_RejectsUnknownKeyAndEmpty(t *testing.T) {
 		t.Error("expected error for empty value")
 	}
 }
+
+func TestLoad_ReadsTemplates(t *testing.T) {
+	repo := t.TempDir()
+	dir := filepath.Join(repo, ".worktrees")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "templates:\n  - name: autofix\n    template: \"autofix/{{.ticketName}}\"\n  - name: feature\n    template: \"feat/{{.ticketName}}\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Templates) != 2 {
+		t.Fatalf("Templates = %+v, want 2", cfg.Templates)
+	}
+	if cfg.Templates[0].Name != "autofix" || cfg.Templates[0].Template != "autofix/{{.ticketName}}" {
+		t.Errorf("Templates[0] = %+v", cfg.Templates[0])
+	}
+}
+
+func TestResolve_TemplatesOverrideOnlyWhenSet(t *testing.T) {
+	lo := Config{Templates: []Template{{Name: "a", Template: "a/{{.x}}"}}}
+	if got := Resolve(lo, Config{}).Templates; len(got) != 1 {
+		t.Errorf("empty hi should not clear templates, got %+v", got)
+	}
+	hi := Config{Templates: []Template{{Name: "b", Template: "b/{{.x}}"}}}
+	if got := Resolve(lo, hi).Templates; len(got) != 1 || got[0].Name != "b" {
+		t.Errorf("non-nil hi should override, got %+v", got)
+	}
+}

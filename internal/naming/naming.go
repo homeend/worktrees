@@ -55,6 +55,20 @@ func GenerateFrom(tmpl string, ts time.Time, digits int) (string, error) {
 	return b.String(), nil
 }
 
+// RenderTemplate renders a user template against string variables, erroring on
+// any referenced-but-missing variable (missingkey=error), mirroring GenerateFrom.
+func RenderTemplate(tmpl string, vars map[string]string) (string, error) {
+	t, err := template.New("tmpl").Option("missingkey=error").Parse(tmpl)
+	if err != nil {
+		return "", fmt.Errorf("invalid template: %w", err)
+	}
+	var b strings.Builder
+	if err := t.Execute(&b, vars); err != nil {
+		return "", fmt.Errorf("template: %w", err)
+	}
+	return b.String(), nil
+}
+
 // SanitizeDir converts a branch-style name into a filesystem-safe directory
 // name: strips the given branch prefix and replaces remaining slashes with "-".
 func SanitizeDir(name, prefix string) string {

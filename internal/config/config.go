@@ -11,12 +11,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Template is a named branch-name template (Go text/template, user variables).
+type Template struct {
+	Name     string `yaml:"name"`
+	Template string `yaml:"template"`
+}
+
 // Config holds resolved worktree settings.
 type Config struct {
-	BaseRef      string `yaml:"base_ref"`
-	Container    string `yaml:"container"`
-	NameTemplate string `yaml:"name_template"`
-	BranchPrefix string `yaml:"branch_prefix"`
+	BaseRef      string     `yaml:"base_ref"`
+	Container    string     `yaml:"container"`
+	NameTemplate string     `yaml:"name_template"`
+	BranchPrefix string     `yaml:"branch_prefix"`
+	Templates    []Template `yaml:"templates"`
 }
 
 // Defaults returns the built-in defaults.
@@ -89,6 +96,9 @@ func Resolve(lo, hi Config) Config {
 	}
 	if hi.BranchPrefix != "" {
 		out.BranchPrefix = hi.BranchPrefix
+	}
+	if hi.Templates != nil {
+		out.Templates = hi.Templates
 	}
 	return out
 }
