@@ -9,7 +9,7 @@ Each requirement has a stable ID (`FR-…`) so future work can reference it.
 "Required" = intended behavior; a change to it is a deliberate product decision,
 not an incidental refactor.
 
-Last verified against the codebase: 2026-05-31.
+Last verified against the codebase: 2026-06-01.
 
 ---
 
@@ -51,12 +51,13 @@ Last verified against the codebase: 2026-05-31.
   **date-first** name: `YYYY-MM-DD_HH-mm-<adjective>-<noun>-NNNN` (NNNN is
   random, zero-padded). Date-first ordering makes worktrees sort chronologically
   and stale ones easy to spot.
-- **FR-4.2 (branch prefix).** Every branch `wt` creates is prefixed `wt/`. This
-  applies to generated **and** user-supplied names/branches. Re-supplying an
-  already-`wt/`-prefixed value must not double-prefix it.
+- **FR-4.2 (branch prefix).** Every branch `wt` creates is prefixed with the
+  **configured branch prefix** (default `wt/`; see FR-9.5). This applies to
+  generated **and** user-supplied names/branches. Re-supplying an
+  already-prefixed value must not double-prefix it.
 - **FR-4.3 (worktree directory name).** The on-disk directory name is the name
-  **without** the `wt/` prefix, sanitized so it contains no `/` (e.g. a branch
-  `wt/feature/foo` → directory `feature-foo`).
+  **without** the configured prefix, sanitized so it contains no `/` (e.g. with
+  prefix `wt/`, branch `wt/feature/foo` → directory `feature-foo`).
 - **FR-4.4 (branch validity).** The final branch name is validated as a legal
   git ref before use; an invalid name fails the command.
 - **FR-4.5 (base ref).** A new branch is cut from the configured `base_ref`
@@ -96,12 +97,17 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
 - **FR-5.8 `wt` (no subcommand)** — launch the TUI when stdout is a TTY;
   otherwise print help. It must never hang on non-interactive invocation, and
   must never launch the TUI for an unknown subcommand (that is an error, exit 1).
+- **FR-5.9 `wt set <key> <value>`** — persist a config value to
+  `.worktrees/config.yaml` (§9.4). Today the only valid key is `branch_prefix`;
+  an unknown key or empty value is an error. `--safe` refuses to overwrite an
+  existing **different** value (an equal value is a no-op success).
+- **FR-5.10 `wt kill-em-all`** — destructive bulk cleanup (§6.6).
 
 ## 6. Removal semantics
 
 - **FR-6.1 (resolution).** `<name>` resolves against the actual worktree list:
   by container-directory basename first, then by branch (with or without the
-  `wt/` prefix). Not-found is an error.
+  configured prefix). Not-found is an error.
 - **FR-6.2 (refuse main).** The main worktree can never be removed.
 - **FR-6.3 (dirty worktree).** Removal refuses a worktree with uncommitted
   changes unless `--force`; the message explains how to override (exit code 5).
@@ -112,6 +118,18 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
   This is non-fatal.
 - **FR-6.5 (force / keep).** `--force-branch` (`-D`) force-deletes an unmerged
   branch; `--keep-branch` never deletes the branch.
+- **FR-6.6 (kill-em-all — bulk cleanup).** `wt kill-em-all` force-removes **every
+  non-main worktree** in the container **and** force-deletes **every branch
+  matching the configured prefix** (incl. orphan branches with no worktree).
+  - The main worktree and non-prefixed branches are **never** touched.
+  - Removal is forced regardless of committed/uncommitted or merged state.
+  - **Lifecycle hooks are skipped**, and a notice saying so is printed.
+  - Without `--yes`: when stdout is a TTY it prints the plan and asks `y/N`;
+    when **not** a TTY it refuses with an error (instructing `--yes`).
+  - It is **best-effort** — a per-item failure is collected and does not stop
+    the rest. A summary is printed; if any item failed, the exit code is `6`
+    (§12). A stale-state `git worktree prune` runs at the end.
+  - Available in the TUI via the `K` key (with its own `y/n` confirmation).
 
 ## 7. Listing scope
 
@@ -154,10 +172,20 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
 
 - **FR-9.1 (location & precedence).** Config lives at
   `.worktrees/config.yaml`. Effective values are **CLI flags > config file >
-  built-in defaults**. A missing config file is not an error.
+  built-in defaults**. A missing config file is not an error. (`branch_prefix`
+  additionally has an environment layer — see FR-9.5.)
 - **FR-9.2 (keys).** `base_ref` (default `HEAD`), `container` (default empty →
   sibling container; used verbatim when set), `name_template` (default empty →
-  built-in date-first pattern).
+  built-in date-first pattern), `branch_prefix` (default `wt/`; see FR-9.5).
+- **FR-9.4 (`wt set`).** `wt set <key> <value>` persists a key to the config
+  file via a comment-preserving upsert (creating `.worktrees/config.yaml` if
+  absent). Only `branch_prefix` is valid today. `--safe` errors when a
+  **different** value already exists; an equal value is a no-op success.
+- **FR-9.5 (branch prefix resolution).** The branch prefix is resolved
+  highest-wins from: `WT_BRANCH_PREFIX` env var, then `branch_prefix` in the
+  config file, then the built-in default `wt/`. A trailing `/` is appended
+  automatically (so `feature` and `feature/` are equivalent); an empty value is
+  treated as "use the default".
 - **FR-9.3 (`wt init` scaffolding).** Creates `.worktrees/` with a commented
   `config.yaml` and four **executable** hook stubs (`pre-create`,
   `post-create`, `pre-remove`, `post-remove`), each a valid no-op
@@ -176,6 +204,9 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
 - **FR-10.4 (delete — `d`).** Pressing `d` on a worktree shows an inline
   `Delete <name>? (y/n)` confirmation; `y` removes it, `n`/`Esc` cancels. The
   main worktree is refused (with a status message, no prompt).
+- **FR-10.4a (kill-em-all — `K`).** Pressing `K` shows an inline confirmation
+  (counting the worktrees and noting hooks are skipped); `y` runs
+  `wt kill-em-all --yes`, `n`/`Esc` cancels (§6.6).
 - **FR-10.5 (action execution).** Create/delete in the TUI perform the **same**
   operations as `wt new` / `wt rm`, including running hooks. The TUI hands the
   terminal over for the action so hook output and any interactive prompts
@@ -208,7 +239,8 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
 
 - **FR-12.1** Stable process exit codes: `0` success; `1` generic/unknown
   failure (incl. unusable/too-old git); `2` not a git repository; `3` name
-  collision (branch already exists); `4` hook failed; `5` dirty worktree.
+  collision (branch already exists); `4` hook failed; `5` dirty worktree;
+  `6` kill-em-all completed with one or more failures (§6.6).
 
 ## 13. Quality requirements
 

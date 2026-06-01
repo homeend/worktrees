@@ -22,7 +22,8 @@ func (a gitAdapter) RemoveWorktree(d, p string, f bool) error { return a.r.Remov
 func (a gitAdapter) DeleteBranch(d, b string, f bool) (bool, error) {
 	return a.r.DeleteBranch(d, b, f)
 }
-func (a gitAdapter) Prune(d string) error { return a.r.Prune(d) }
+func (a gitAdapter) Prune(d string) error                       { return a.r.Prune(d) }
+func (a gitAdapter) ListBranches(d, p string) ([]string, error) { return a.r.ListBranches(d, p) }
 func (a gitAdapter) ListWorktrees(d string) ([]GitWorktree, error) {
 	ws, err := a.r.ListWorktrees(d)
 	if err != nil {
@@ -44,6 +45,7 @@ type staticCfg struct{}
 func (staticCfg) BaseRef() string      { return "HEAD" }
 func (staticCfg) Container() string    { return "" }
 func (staticCfg) NameTemplate() string { return "" }
+func (staticCfg) BranchPrefix() string { return "wt/" }
 
 func newRealRepo(t *testing.T) string {
 	t.Helper()

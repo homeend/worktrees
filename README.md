@@ -125,6 +125,7 @@ Keys:
 | `↑`/`↓` (or `k`/`j`) | move the cursor                          |
 | `n`       | create a new worktree (auto-generated name)         |
 | `d`       | delete the selected worktree (asks `y`/`n` to confirm; the main worktree is refused) |
+| `K`       | **kill-em-all** — remove every worktree and prefixed branch (asks `y`/`n`; hooks skipped) |
 | `q` / `Ctrl+C` | quit                                           |
 
 `n` and `d` run the same `wt new` / `wt rm` underneath, so **hooks run and their
@@ -150,6 +151,8 @@ wt list | wt ls      List worktrees (--json for machine output)
 wt rm <name>         Remove a worktree and its branch
 wt path <name>       Print a worktree's absolute path
 wt prune             Clear stale worktree state (git worktree prune)
+wt set <key> <val>   Set a config value (e.g. branch_prefix); --safe
+wt kill-em-all       Remove ALL worktrees + prefixed branches (--yes)
 wt init              Scaffold .worktrees/ (config + hook stubs)
 wt completion <sh>   Generate shell completion (bash|zsh|fish|powershell)
 wt                   Interactive TUI (when run in a terminal)
@@ -175,6 +178,26 @@ the branch is **kept**, with a message telling you how to force-delete it:
 ```
 Removed worktree "my-feature" (.../myrepo.worktrees/my-feature)
 Kept branch wt/my-feature (unmerged). Delete with: wt rm my-feature --force-branch, or git branch -D wt/my-feature
+```
+
+### Removing everything — `wt kill-em-all`
+
+`wt kill-em-all` is a destructive clean-slate cleanup: it **force-removes every
+worktree** in the repo's container and **force-deletes every branch matching the
+configured prefix** (default `wt/`), *including orphan branches with no
+worktree*. Removal is forced regardless of committed/uncommitted state. The main
+worktree and any non-prefixed branch (e.g. `main`) are never touched.
+
+- **Lifecycle hooks are skipped** (a notice is printed).
+- Without `--yes`, it prints what will be removed and asks `y/N` when stdout is a
+  terminal; with no terminal it refuses and tells you to pass `--yes`.
+- It is **best-effort**: a failure on one item is reported in the summary and
+  does not stop the rest. If anything failed, the process exits with code `6`.
+- Also available in the TUI via the `K` key.
+
+```sh
+wt kill-em-all          # prompts for confirmation
+wt kill-em-all --yes    # no prompt (for scripts)
 ```
 
 ---
@@ -295,7 +318,29 @@ esac
 base_ref: HEAD          # default ref new branches are cut from
 container: ""           # override the container path; used verbatim
 name_template: ""       # Go text/template for generated names
+branch_prefix: "wt/"    # prefix for branches created by `wt new`
 ```
+
+### Branch prefix
+
+Branches created by `wt new` are prefixed (default `wt/`). The prefix is
+resolved in this order (highest wins):
+
+1. the `WT_BRANCH_PREFIX` environment variable,
+2. `branch_prefix` in `.worktrees/config.yaml`,
+3. the built-in default `wt/`.
+
+A trailing `/` is appended automatically, so `feature` and `feature/` are
+equivalent. Set it without hand-editing the file using `wt set`:
+
+```sh
+wt set branch_prefix feature          # branches become feature/<name>
+wt set branch_prefix feature --safe   # error if a *different* value is already set
+WT_BRANCH_PREFIX=hotfix wt new        # one-off override via env
+```
+
+`--safe` is a no-op when the existing value already equals the new one; it only
+errors when a different value is already persisted.
 
 `name_template` is a Go `text/template` with these fields:
 `{{.Date}}` `{{.Adjective}}` `{{.Noun}}` `{{.Digits}}`. For example:
