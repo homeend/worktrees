@@ -42,3 +42,23 @@ type RemoveResult struct {
 	BranchDeleted bool
 	BranchKept    bool // true if safe-delete refused (unmerged)
 }
+
+// RemoveAllPlan is the read-only preview of a kill-em-all operation.
+type RemoveAllPlan struct {
+	Worktrees []WorktreeInfo // non-main, in-container
+	Branches  []string       // prefix-matching short names
+}
+
+// CleanupFailure records a single non-fatal failure during RemoveAll.
+type CleanupFailure struct {
+	Kind string // "worktree" | "branch" | "prune"
+	Ref  string // path or branch name
+	Err  string
+}
+
+// RemoveAllResult summarizes a kill-em-all execution (best-effort).
+type RemoveAllResult struct {
+	WorktreesRemoved int
+	BranchesDeleted  int
+	Failures         []CleanupFailure
+}

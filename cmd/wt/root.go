@@ -84,6 +84,7 @@ func (a gitAdapter) BranchExists(d, b string) bool                  { return a.r
 func (a gitAdapter) AddWorktree(d, p, b, base string) error         { return a.r.AddWorktree(d, p, b, base) }
 func (a gitAdapter) RemoveWorktree(d, p string, f bool) error       { return a.r.RemoveWorktree(d, p, f) }
 func (a gitAdapter) DeleteBranch(d, b string, f bool) (bool, error) { return a.r.DeleteBranch(d, b, f) }
+func (a gitAdapter) ListBranches(d, p string) ([]string, error)     { return a.r.ListBranches(d, p) }
 func (a gitAdapter) Prune(d string) error                           { return a.r.Prune(d) }
 func (a gitAdapter) ListWorktrees(d string) ([]worktree.GitWorktree, error) {
 	ws, err := a.r.ListWorktrees(d)

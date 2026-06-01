@@ -264,3 +264,65 @@ func (m *Manager) Remove(dir string, opts RemoveOptions) (RemoveResult, error) {
 func (m *Manager) Find(dir, name string) (WorktreeInfo, error) {
 	return m.resolveWorktree(dir, name)
 }
+
+// PlanRemoveAll returns the read-only preview of a kill-em-all run: every
+// non-main worktree in the container and every branch matching the configured
+// prefix (including orphans with no worktree). It performs no mutation.
+func (m *Manager) PlanRemoveAll(dir string) (RemoveAllPlan, error) {
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return RemoveAllPlan{}, err
+	}
+	list, err := m.List(dir)
+	if err != nil {
+		return RemoveAllPlan{}, err
+	}
+	var plan RemoveAllPlan
+	for _, w := range list {
+		if !w.IsMain {
+			plan.Worktrees = append(plan.Worktrees, w)
+		}
+	}
+	branches, err := m.git.ListBranches(repoRoot, m.cfg.BranchPrefix())
+	if err != nil {
+		return RemoveAllPlan{}, err
+	}
+	plan.Branches = branches
+	return plan, nil
+}
+
+// RemoveAll force-removes every non-main container worktree and force-deletes
+// every prefix-matching branch (orphans included), skipping lifecycle hooks. It
+// is best-effort: a failure on one item is recorded and execution continues. A
+// non-nil error is returned only for a fatal setup failure (e.g. planning). A
+// final `git worktree prune` clears stale admin entries.
+func (m *Manager) RemoveAll(dir string) (RemoveAllResult, error) {
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return RemoveAllResult{}, err
+	}
+	plan, err := m.PlanRemoveAll(dir)
+	if err != nil {
+		return RemoveAllResult{}, err
+	}
+
+	var res RemoveAllResult
+	for _, w := range plan.Worktrees {
+		if err := m.git.RemoveWorktree(repoRoot, w.Path, true); err != nil {
+			res.Failures = append(res.Failures, CleanupFailure{Kind: "worktree", Ref: w.Path, Err: err.Error()})
+			continue
+		}
+		res.WorktreesRemoved++
+	}
+	for _, b := range plan.Branches {
+		if _, err := m.git.DeleteBranch(repoRoot, b, true); err != nil {
+			res.Failures = append(res.Failures, CleanupFailure{Kind: "branch", Ref: b, Err: err.Error()})
+			continue
+		}
+		res.BranchesDeleted++
+	}
+	if err := m.git.Prune(repoRoot); err != nil {
+		res.Failures = append(res.Failures, CleanupFailure{Kind: "prune", Ref: repoRoot, Err: err.Error()})
+	}
+	return res, nil
+}

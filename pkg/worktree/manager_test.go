@@ -297,6 +297,59 @@ func TestRemove_KeepBranchSkipsDeletion(t *testing.T) {
 	}
 }
 
+func TestPlanRemoveAll_ExcludesMainIncludesOrphans(t *testing.T) {
+	fg := &fakeGit{
+		mainRoot: "/repo",
+		worktrees: []GitWorktree{
+			{Path: "/repo", Branch: "refs/heads/main"},
+			{Path: "/repo.worktrees/a", Branch: "refs/heads/wt/a"},
+		},
+		listBranches: []string{"wt/a", "wt/orphan"},
+	}
+	m := New(fg, &fakeHooks{}, fakeConfig{branchPrefix: "wt/"})
+	plan, err := m.PlanRemoveAll("/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Worktrees) != 1 || plan.Worktrees[0].IsMain {
+		t.Errorf("plan worktrees = %+v, want 1 non-main", plan.Worktrees)
+	}
+	if len(plan.Branches) != 2 {
+		t.Errorf("plan branches = %v, want wt/a + wt/orphan", plan.Branches)
+	}
+}
+
+func TestRemoveAll_BestEffortContinuesPastFailures(t *testing.T) {
+	fg := &fakeGit{
+		mainRoot: "/repo",
+		worktrees: []GitWorktree{
+			{Path: "/repo", Branch: "refs/heads/main"},
+			{Path: "/repo.worktrees/a", Branch: "refs/heads/wt/a"},
+			{Path: "/repo.worktrees/b", Branch: "refs/heads/wt/b"},
+		},
+		listBranches:    []string{"wt/a", "wt/b", "wt/orphan"},
+		removeWtErr:     map[string]error{"/repo.worktrees/a": errInjected},
+		deleteBranchErr: map[string]error{"wt/b": errInjected},
+	}
+	m := New(fg, &fakeHooks{}, fakeConfig{branchPrefix: "wt/"})
+	res, err := m.RemoveAll("/repo")
+	if err != nil {
+		t.Fatalf("RemoveAll returned fatal error: %v", err)
+	}
+	if res.WorktreesRemoved != 1 { // b succeeded, a failed
+		t.Errorf("WorktreesRemoved = %d, want 1", res.WorktreesRemoved)
+	}
+	if res.BranchesDeleted != 2 { // a + orphan; b failed
+		t.Errorf("BranchesDeleted = %d, want 2", res.BranchesDeleted)
+	}
+	if len(res.Failures) != 2 {
+		t.Errorf("Failures = %+v, want 2", res.Failures)
+	}
+	if !fg.pruned {
+		t.Error("expected tail prune to run")
+	}
+}
+
 func TestRemove_UnmergedBranchKeptAndReported(t *testing.T) {
 	m, g, _ := newTestManager("/home/me/myrepo")
 	seedRemovable(g)

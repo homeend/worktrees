@@ -3,16 +3,20 @@ package worktree
 import "fmt"
 
 type fakeGit struct {
-	mainRoot     string
-	branches     map[string]bool
-	worktrees    []GitWorktree
-	addErr       error
-	removeErr    error
-	verifyRefErr error
-	added        []string
-	removedPaths []string
-	deleted      []string
-	deleteOK     bool
+	mainRoot        string
+	branches        map[string]bool
+	worktrees       []GitWorktree
+	addErr          error
+	removeErr       error
+	verifyRefErr    error
+	added           []string
+	removedPaths    []string
+	deleted         []string
+	deleteOK        bool
+	listBranches    []string
+	removeWtErr     map[string]error // keyed by path
+	deleteBranchErr map[string]error // keyed by branch
+	pruned          bool
 }
 
 func newFakeGit(root string) *fakeGit {
@@ -26,7 +30,8 @@ func (f *fakeGit) BranchExists(_, b string) bool   { return f.branches[b] }
 func (f *fakeGit) ListWorktrees(string) ([]GitWorktree, error) {
 	return f.worktrees, nil
 }
-func (f *fakeGit) Prune(string) error { return nil }
+func (f *fakeGit) ListBranches(_, _ string) ([]string, error) { return f.listBranches, nil }
+func (f *fakeGit) Prune(string) error                         { f.pruned = true; return nil }
 
 func (f *fakeGit) AddWorktree(_, path, branch, _ string) error {
 	if f.addErr != nil {
@@ -42,11 +47,17 @@ func (f *fakeGit) RemoveWorktree(_, path string, _ bool) error {
 	if f.removeErr != nil {
 		return f.removeErr
 	}
+	if err := f.removeWtErr[path]; err != nil {
+		return err
+	}
 	f.removedPaths = append(f.removedPaths, path)
 	return nil
 }
 
 func (f *fakeGit) DeleteBranch(_, branch string, force bool) (bool, error) {
+	if err := f.deleteBranchErr[branch]; err != nil {
+		return false, err
+	}
 	f.deleted = append(f.deleted, branch)
 	if !force && !f.deleteOK {
 		return false, nil

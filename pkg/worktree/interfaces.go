@@ -10,6 +10,7 @@ type GitRunner interface {
 	ListWorktrees(dir string) ([]GitWorktree, error)
 	RemoveWorktree(dir, path string, force bool) error
 	DeleteBranch(dir, branch string, force bool) (bool, error)
+	ListBranches(dir, prefix string) ([]string, error)
 	Prune(dir string) error
 }
 
