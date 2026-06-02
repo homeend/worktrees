@@ -117,6 +117,25 @@ func TestDelete_ConfirmYesRemovesByDirName(t *testing.T) {
 	}
 }
 
+func TestDelete_ConfirmForceRemovesWithForceFlags(t *testing.T) {
+	m, rec := newTestModel(sample())
+	down, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown}) // move to /repo.worktrees/feat
+	conf, _ := down.(model).Update(key("d"))
+	if conf.(model).mode != modeConfirmDelete {
+		t.Fatalf("d should enter confirm mode, got %v", conf.(model).mode)
+	}
+	done, cmd := conf.(model).Update(key("f"))
+	if cmd == nil {
+		t.Fatal("f should return an action command")
+	}
+	if done.(model).mode != modeNormal {
+		t.Errorf("mode should return to normal after force confirm")
+	}
+	if len(*rec) != 1 || (*rec)[0] != "rm feat --force --force-branch --repo /repo" {
+		t.Errorf("runAction = %v, want [rm feat --force --force-branch --repo /repo]", *rec)
+	}
+}
+
 func TestDelete_ConfirmNoCancels(t *testing.T) {
 	m, rec := newTestModel(sample())
 	down, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})

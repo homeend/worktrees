@@ -31,7 +31,9 @@ func (m model) View() string {
 	switch m.mode {
 	case modeConfirmDelete:
 		if it, ok := m.current(); ok {
-			b.WriteString(promptStyle.Render(fmt.Sprintf("Delete %s? (y/n)", filepath.Base(it.Path))) + "\n")
+			b.WriteString(promptStyle.Render(fmt.Sprintf(
+				"Delete %s? (y)es  (n)o  (f)orce — force discards uncommitted changes & deletes the branch",
+				filepath.Base(it.Path))) + "\n")
 		}
 	case modeConfirmKillAll:
 		n := 0

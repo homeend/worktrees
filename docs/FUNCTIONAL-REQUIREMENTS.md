@@ -231,8 +231,10 @@ command (`new`, `list`, `rm`, `prune`, `path`, `init`).
 - **FR-10.3 (create — `n`).** Pressing `n` immediately creates a worktree with a
   generated name (no text entry).
 - **FR-10.4 (delete — `d`).** Pressing `d` on a worktree shows an inline
-  `Delete <name>? (y/n)` confirmation; `y` removes it, `n`/`Esc` cancels. The
-  main worktree is refused (with a status message, no prompt).
+  `Delete <name>? (y/n/f)` confirmation; `y` removes it (safe), `f` **force**-
+  removes it (runs `wt rm --force --force-branch`: discards uncommitted changes
+  and force-deletes the branch even if unmerged), `n`/`Esc` cancels. The main
+  worktree is refused (with a status message, no prompt).
 - **FR-10.4a (kill-em-all — `K`).** Pressing `K` shows an inline confirmation
   (counting the worktrees and noting hooks are skipped); `y` runs
   `wt kill-em-all --yes`, `n`/`Esc` cancels (§6.6).

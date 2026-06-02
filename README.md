@@ -129,7 +129,7 @@ Keys:
 | `n`       | create a new worktree (auto-generated name)         |
 | `b`       | create a worktree from an existing branch (type the branch name, Enter) |
 | `t`       | view configured branch templates                    |
-| `d`       | delete the selected worktree (asks `y`/`n` to confirm; the main worktree is refused) |
+| `d`       | delete the selected worktree (asks `y`/`n`/`f` to confirm — `f` **force**-deletes, discarding uncommitted changes and removing an unmerged branch; the main worktree is refused) |
 | `K`       | **kill-em-all** — remove every worktree and prefixed branch (asks `y`/`n`; hooks skipped) |
 | `q` / `Ctrl+C` | quit                                           |
 

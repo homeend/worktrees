@@ -306,6 +306,17 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		name := filepath.Base(it.Path)
 		m.status = "removing " + name + "…"
 		return m, m.runAction("rm", name, "--repo", m.dir)
+	case "f", "F":
+		// Force: discard uncommitted changes and force-delete the branch even
+		// if unmerged (`wt rm --force --force-branch`).
+		m.mode = modeNormal
+		it, ok := m.current()
+		if !ok {
+			return m, nil
+		}
+		name := filepath.Base(it.Path)
+		m.status = "force-removing " + name + "…"
+		return m, m.runAction("rm", name, "--force", "--force-branch", "--repo", m.dir)
 	case "n", "N", "esc":
 		m.mode = modeNormal
 		return m, nil
