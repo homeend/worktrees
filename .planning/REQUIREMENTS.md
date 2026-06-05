@@ -9,21 +9,21 @@ Requirements for this milestone. Each maps to a roadmap phase.
 
 ### Mode Detection
 
-- [ ] **DETECT-01**: When `wt new` is run from inside a managed (non-main) worktree, it derives the new branch from that worktree's current branch instead of `base_ref`/HEAD
-- [ ] **DETECT-02**: When `wt new` is run from the main repo root, behavior is unchanged (branches off `base_ref`/HEAD as today)
+- [x] **DETECT-01**: When `wt new` is run from inside a managed (non-main) worktree, it derives the new branch from that worktree's current branch instead of `base_ref`/HEAD
+- [x] **DETECT-02**: When `wt new` is run from the main repo root, behavior is unchanged (branches off `base_ref`/HEAD as today)
 
 ### Branch Derivation
 
-- [ ] **DERIVE-01**: The new branch is created from the committed tip of the current worktree's branch (uncommitted working-tree changes are not carried over)
-- [ ] **DERIVE-02**: The new worktree is created in the main repo's worktree container, mirroring the full branch path — not nested under the current worktree
-- [ ] **DERIVE-03**: The derived branch keeps the parent branch's existing prefix verbatim; `--no-prefix` / `--branch-prefix` are not applied in worktree-derive mode
+- [x] **DERIVE-01**: The new branch is created from the committed tip of the current worktree's branch (uncommitted working-tree changes are not carried over)
+- [x] **DERIVE-02**: The new worktree is created in the main repo's worktree container, mirroring the full branch path — not nested under the current worktree
+- [x] **DERIVE-03**: The derived branch keeps the parent branch's existing prefix verbatim; `--no-prefix` / `--branch-prefix` are not applied in worktree-derive mode
 
 ### Naming
 
-- [ ] **NAME-01**: With no positional token, the new branch and worktree are named `<current-branch>-vNNN` with a zero-padded 3-digit number (e.g. `feature-login-v001`)
-- [ ] **NAME-02**: The `-vNNN` number is the lowest value ≥ 1 whose branch does not already exist (existing numbers are skipped, gaps are filled)
-- [ ] **NAME-03**: A positional token (e.g. `wt new "-patch01"`) is appended literally as a suffix to the current branch name (`feature-login-patch01`), replacing the auto-number
-- [ ] **NAME-04**: A custom-token name whose branch already exists fails with a clear error rather than silently renaming or auto-bumping
+- [x] **NAME-01**: With no positional token, the new branch and worktree are named `<current-branch>-vNNN` with a zero-padded 3-digit number (e.g. `feature-login-v001`)
+- [x] **NAME-02**: The `-vNNN` number is the lowest value ≥ 1 whose branch does not already exist (existing numbers are skipped, gaps are filled)
+- [x] **NAME-03**: A positional token (e.g. `wt new "-patch01"`) is appended literally as a suffix to the current branch name (`feature-login-patch01`), replacing the auto-number
+- [x] **NAME-04**: A custom-token name whose branch already exists fails with a clear error rather than silently renaming or auto-bumping
 
 ## v2 Requirements
 
@@ -43,15 +43,15 @@ None deferred for this milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DETECT-01 | Phase 1 | Pending |
-| DETECT-02 | Phase 1 | Pending |
-| DERIVE-01 | Phase 1 | Pending |
-| DERIVE-02 | Phase 1 | Pending |
-| DERIVE-03 | Phase 1 | Pending |
-| NAME-01 | Phase 1 | Pending |
-| NAME-02 | Phase 1 | Pending |
-| NAME-03 | Phase 1 | Pending |
-| NAME-04 | Phase 1 | Pending |
+| DETECT-01 | Phase 1 | Complete |
+| DETECT-02 | Phase 1 | Complete |
+| DERIVE-01 | Phase 1 | Complete |
+| DERIVE-02 | Phase 1 | Complete |
+| DERIVE-03 | Phase 1 | Complete |
+| NAME-01 | Phase 1 | Complete |
+| NAME-02 | Phase 1 | Complete |
+| NAME-03 | Phase 1 | Complete |
+| NAME-04 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 9 total
