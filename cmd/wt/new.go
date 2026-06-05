@@ -79,6 +79,9 @@ func buildAddOptions(r addResolver, args []string, tmpl, fromBranch, branch, bas
 			return worktree.AddOptions{}, err
 		}
 		opts.Name = name
+		// Signal that Name came from a template so derive mode (Add run from
+		// inside a worktree) does not reinterpret it as a literal suffix token.
+		opts.FromTemplate = true
 	default:
 		if len(args) > 1 {
 			return worktree.AddOptions{}, fmt.Errorf("expected at most one name argument, got %d", len(args))
@@ -91,9 +94,27 @@ func buildAddOptions(r addResolver, args []string, tmpl, fromBranch, branch, bas
 }
 
 var newCmd = &cobra.Command{
-	Use:   "new [name | var:value ...]",
-	Short: "Create a new worktree",
-	Args:  cobra.ArbitraryArgs,
+	Use:   "new [name | suffix | var:value ...]",
+	Short: "Create a new worktree (derives from the current worktree's branch when run inside one)",
+	Long: `Create a new worktree.
+
+Run from the main repo root, ` + "`wt new`" + ` branches off the configured base
+ref (base_ref / HEAD) exactly as before.
+
+Run from inside a managed worktree, ` + "`wt new`" + ` instead derives the new branch
+from the current worktree's branch, cutting it from that branch's committed tip
+and placing the new worktree in the main repo's container:
+
+  wt new            # <current-branch>-vNNN (lowest free, zero-padded)
+  wt new -- -patch01  # <current-branch>-patch01 (literal suffix)
+
+A custom suffix token that starts with a dash must be passed after ` + "`--`" + `
+(e.g. ` + "`wt new -- -patch01`" + `); otherwise cobra parses the leading-dash
+argument as a flag. The token is appended verbatim — its leading dash is the
+separator. If the resulting branch already exists, the command fails rather than
+auto-renaming. The parent branch's prefix is inherited as-is; --no-prefix /
+--branch-prefix / --base have no effect in derive mode.`,
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m, cwd, err := managerForWorkdir()
 		if err != nil {
