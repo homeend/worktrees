@@ -66,7 +66,7 @@ Running `wt new` from inside a worktree creates a new branch + worktree based on
 | Custom token replaces numbering; collision is an error | User explicitly chose error over auto-bumping | ✓ Good — shipped in Phase 1 |
 | Derived branch inherits the parent branch's prefix; `--no-prefix`/`--branch-prefix` don't apply in this mode | Prefix is already part of the parent branch name | ✓ Good — shipped in Phase 1 |
 | New branch from committed tip; uncommitted changes not copied | Standard `git worktree add` semantics | ✓ Good — shipped in Phase 1 |
-| Code-review warnings WR-01/WR-02/WR-03 | From `01-REVIEW.md`, applied via `/gsd:code-review 1 --fix` | ✓ Good — WR-01 (separator inserted for no-dash token) + WR-02 (`dir` normalized via Abs+EvalSymlinks) fixed with tests; WR-03 documented (BranchExists error semantics left as-is per reviewer). Info findings IN-01/IN-02 deferred. |
+| Code-review warnings WR-01/WR-02/WR-03 | From `01-REVIEW.md`, applied via `/gsd:code-review 1 --fix` | ✓ Good — WR-01 (separator inserted for no-dash token) + WR-02 (`dir` normalized via Abs+EvalSymlinks) fixed with tests; WR-03 documented (BranchExists error semantics left as-is per reviewer). Info findings IN-01/IN-02 also addressed via `--fix --all` (doc-only: IN-01 restructure is algebraically identical, IN-02 loop-bound note). All 5 findings closed. |
 
 ## Evolution
 
