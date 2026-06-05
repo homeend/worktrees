@@ -41,25 +41,23 @@ None deferred for this milestone.
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DETECT-01 | TBD | Pending |
-| DETECT-02 | TBD | Pending |
-| DERIVE-01 | TBD | Pending |
-| DERIVE-02 | TBD | Pending |
-| DERIVE-03 | TBD | Pending |
-| NAME-01 | TBD | Pending |
-| NAME-02 | TBD | Pending |
-| NAME-03 | TBD | Pending |
-| NAME-04 | TBD | Pending |
+| DETECT-01 | Phase 1 | Pending |
+| DETECT-02 | Phase 1 | Pending |
+| DERIVE-01 | Phase 1 | Pending |
+| DERIVE-02 | Phase 1 | Pending |
+| DERIVE-03 | Phase 1 | Pending |
+| NAME-01 | Phase 1 | Pending |
+| NAME-02 | Phase 1 | Pending |
+| NAME-03 | Phase 1 | Pending |
+| NAME-04 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 9 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 9 ⚠️
+- Mapped to phases: 9 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-05*
-*Last updated: 2026-06-05 after initial definition*
+*Last updated: 2026-06-05 after roadmap creation*
