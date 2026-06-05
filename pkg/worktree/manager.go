@@ -88,6 +88,49 @@ func defaultDigits() int {
 	return 1
 }
 
+// currentWorktreeBranch detects whether dir lives inside a managed (non-main)
+// worktree and returns that worktree's branch (prefix included, refs/heads/
+// stripped). It selects the listed worktree whose Path is the longest
+// path-separator-bounded prefix of dir, so a cwd that is a subdirectory of the
+// worktree still resolves, and sibling worktrees sharing a leading string
+// prefix (e.g. "feat" vs "feat-extra") never false-match. It returns ok=false
+// when the matched entry is the main worktree (Path == repoRoot) or has no
+// branch (detached/bare).
+func (m *Manager) currentWorktreeBranch(dir, repoRoot string) (parentBranch string, ok bool) {
+	worktrees, err := m.git.ListWorktrees(dir)
+	if err != nil {
+		return "", false
+	}
+	sep := string(os.PathSeparator)
+	best := ""
+	bestBranch := ""
+	for _, w := range worktrees {
+		if dir != w.Path && !strings.HasPrefix(dir, w.Path+sep) {
+			continue
+		}
+		if len(w.Path) > len(best) {
+			best = w.Path
+			bestBranch = w.Branch
+		}
+	}
+	if best == "" || best == repoRoot || bestBranch == "" {
+		return "", false
+	}
+	return strings.TrimPrefix(bestBranch, "refs/heads/"), true
+}
+
+// nextFreeVersion returns the lowest free "<parentBranch>-vNNN" suffix (NNN
+// zero-padded to width 3, starting at 1), skipping any candidate whose branch
+// already exists. It fills gaps: with only -v002 present it returns -v001.
+func (m *Manager) nextFreeVersion(repoRoot, parentBranch string) string {
+	for n := 1; ; n++ {
+		candidate := fmt.Sprintf("%s-v%03d", parentBranch, n)
+		if !m.git.BranchExists(repoRoot, candidate) {
+			return candidate
+		}
+	}
+}
+
 // Add creates a new worktree following the create transaction:
 // resolve+validate -> pre-create hook -> git worktree add -> post-create hook.
 // A pre-create failure aborts before anything is created. A post-create failure
@@ -101,11 +144,37 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	}
 
 	fromExisting := opts.FromBranch != ""
+
+	// Derive mode: when Add is run from inside a managed (non-main) worktree and
+	// the caller supplied no explicit branch source, the new branch is derived
+	// from the current worktree's branch. The cheap conditions are checked first
+	// so the explicit/from-branch/template paths never make the extra
+	// ListWorktrees git call and behave exactly as before.
+	deriveMode := false
+	var parentBranch string
+	if !fromExisting && opts.Branch == "" && !opts.FromTemplate {
+		if pb, ok := m.currentWorktreeBranch(dir, repoRoot); ok {
+			deriveMode = true
+			parentBranch = pb
+		}
+	}
+
 	var name, branch, baseRef string
-	if fromExisting {
+	switch {
+	case deriveMode:
+		// Auto -vNNN when no token; otherwise append the literal token verbatim
+		// (the user's leading dash is the separator). The parent branch already
+		// carries its prefix, which is inherited as-is — no prefix logic here.
+		if opts.Name == "" {
+			branch = m.nextFreeVersion(repoRoot, parentBranch)
+		} else {
+			branch = parentBranch + opts.Name
+		}
+		name = strings.TrimPrefix(branch, m.cfg.BranchPrefix())
+	case fromExisting:
 		branch = opts.FromBranch
 		name = strings.TrimPrefix(branch, m.cfg.BranchPrefix())
-	} else {
+	default:
 		name, branch, err = m.resolveNames(opts)
 		if err != nil {
 			return AddResult{}, err
@@ -116,11 +185,25 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 		return AddResult{}, fmt.Errorf("invalid branch name %q: %w", branch, err)
 	}
 
-	if fromExisting {
+	switch {
+	case deriveMode:
+		// The auto -vNNN path is collision-free by construction; only the
+		// custom-token path can collide, and that is a hard error (no rename, no
+		// auto-bump) with a message that names the derived branch.
+		if opts.Name != "" && m.git.BranchExists(repoRoot, branch) {
+			return AddResult{}, fmt.Errorf("derived branch %q already exists", branch)
+		}
+		// In derive mode the base is the parent branch's committed tip; opts.BaseRef
+		// and the configured base_ref are ignored by design.
+		baseRef = parentBranch
+		if err := m.git.VerifyRef(repoRoot, baseRef); err != nil {
+			return AddResult{}, fmt.Errorf("base ref %q not found: %w", baseRef, err)
+		}
+	case fromExisting:
 		if !m.git.BranchExists(repoRoot, branch) {
 			return AddResult{}, fmt.Errorf("branch %q does not exist locally", branch)
 		}
-	} else {
+	default:
 		if m.git.BranchExists(repoRoot, branch) {
 			return AddResult{}, fmt.Errorf("branch %q already exists; pass a different --branch", branch)
 		}
