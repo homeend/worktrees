@@ -135,6 +135,11 @@ func (m *Manager) currentWorktreeBranch(dir, repoRoot string) (parentBranch stri
 // zero-padded to width 3, starting at 1), skipping any candidate whose branch
 // already exists. It fills gaps: with only -v002 present it returns -v001.
 //
+// The loop is intentionally unbounded in form but always terminates: it returns
+// at the first free slot, and the number of iterations is bounded by the count
+// of existing -vNNN siblings (with N existing, the worst case scans N+1 before
+// hitting a free slot). It is not an infinite-loop risk.
+//
 // This relies on BranchExists treating operational git errors (lock
 // contention, a corrupt ref) as "absent" rather than surfacing them. A
 // transient git failure could therefore be misread as a free slot and yield a
