@@ -75,6 +75,45 @@ func TestBuildAddOptions_PlainName(t *testing.T) {
 	}
 }
 
+func TestBuildAddOptions_LeadingDashTokenPassthrough(t *testing.T) {
+	// A leading-dash positional token reaches opts.Name verbatim (the domain
+	// reinterprets it as a literal suffix in derive mode); FromTemplate stays false.
+	opts, err := buildAddOptions(fakeResolver{}, []string{"-patch01"}, "", "", "", "", false, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Name != "-patch01" {
+		t.Errorf("Name = %q, want -patch01 (verbatim)", opts.Name)
+	}
+	if opts.FromTemplate {
+		t.Error("FromTemplate should be false for a positional token")
+	}
+}
+
+func TestBuildAddOptions_TemplateSetsFromTemplate(t *testing.T) {
+	opts, err := buildAddOptions(fakeResolver{name: "feat/123"},
+		[]string{"ticket:123"}, "feature", "", "", "", false, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Name != "feat/123" {
+		t.Errorf("Name = %q, want feat/123", opts.Name)
+	}
+	if !opts.FromTemplate {
+		t.Error("FromTemplate should be true when name came from --template")
+	}
+}
+
+func TestBuildAddOptions_PlainNameNotFromTemplate(t *testing.T) {
+	opts, err := buildAddOptions(fakeResolver{}, []string{"myname"}, "", "", "", "", false, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Name != "myname" || opts.FromTemplate {
+		t.Errorf("Name=%q FromTemplate=%v, want myname/false", opts.Name, opts.FromTemplate)
+	}
+}
+
 func TestBuildAddOptions_PrefixControls(t *testing.T) {
 	// --branch-prefix is normalized (trailing slash) and passed through.
 	opts, err := buildAddOptions(fakeResolver{}, []string{"hotfix"}, "", "", "", "", false, false, "team")
