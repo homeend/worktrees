@@ -68,6 +68,16 @@ Running `wt new` from inside a worktree creates a new branch + worktree based on
 | New branch from committed tip; uncommitted changes not copied | Standard `git worktree add` semantics | ✓ Good — shipped in Phase 1 |
 | Code-review warnings WR-01/WR-02/WR-03 | From `01-REVIEW.md`, applied via `/gsd:code-review 1 --fix` | ✓ Good — WR-01 (separator inserted for no-dash token) + WR-02 (`dir` normalized via Abs+EvalSymlinks) fixed with tests; WR-03 documented (BranchExists error semantics left as-is per reviewer). Info findings IN-01/IN-02 also addressed via `--fix --all` (doc-only: IN-01 restructure is algebraically identical, IN-02 loop-bound note). All 5 findings closed. |
 
+## Current State
+
+**Shipped: v1.0 MVP (2026-06-06)** — `wt new` run from inside a worktree now branches off that worktree's own branch, auto-named `<branch>-vNNN` (zero-padded, lowest-free, gap-filling) or with a caller-supplied `-suffix` token (`wt new -- -suffix`; collision → clear error). Main-root behavior unchanged. Delivered in Phase 1 (~155 LOC across `pkg/worktree/manager.go`, `pkg/worktree/types.go`, `cmd/wt/new.go`), with unit + real-git integration tests. Phase goal verified 5/5; code review run with all 5 findings remediated.
+
+## Next Milestone Goals
+
+(To be defined via `/gsd:new-milestone`.) Candidate follow-ups surfaced during v1.0:
+- Make `BranchExists` distinguish "absent" from "git errored" (`(bool, error)`) so derive-mode numbering/collision fail loudly instead of silently (code-review WR-03 deeper fix, deferred).
+- TUI affordance for worktree-derived `new` (currently CLI-only).
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
@@ -86,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-05 after Phase 1 completion (milestone v1.0 delivered — worktree-derived `wt new`)*
+*Last updated: 2026-06-06 after v1.0 milestone*
