@@ -97,6 +97,18 @@ func defaultDigits() int {
 // when the matched entry is the main worktree (Path == repoRoot) or has no
 // branch (detached/bare).
 func (m *Manager) currentWorktreeBranch(dir, repoRoot string) (parentBranch string, ok bool) {
+	// git emits worktree paths via --show-toplevel, which are always absolute
+	// and symlink-resolved. dir may arrive non-canonical (a relative --repo, or
+	// a symlinked os.Getwd() such as macOS /var vs /private/var), which would
+	// make the prefix comparison below silently fail and drop out of derive
+	// mode. Normalize to an absolute, symlink-resolved path first; each step is
+	// guarded and falls back to the prior value on error.
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
 	worktrees, err := m.git.ListWorktrees(dir)
 	if err != nil {
 		return "", false

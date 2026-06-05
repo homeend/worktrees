@@ -376,6 +376,33 @@ func TestAdd_DeriveMode_IgnoresPrefixAndBaseOverrides(t *testing.T) {
 	}
 }
 
+func TestAdd_DeriveMode_NonCanonicalDir(t *testing.T) {
+	// A relative dir (e.g. from a relative --repo) must still trigger derive
+	// mode: currentWorktreeBranch normalizes dir to an absolute path before the
+	// prefix comparison against git's absolute --show-toplevel paths. The fake
+	// worktree path is set to what filepath.Abs(relDir) produces so the match
+	// only succeeds when normalization runs. EvalSymlinks errors for the
+	// nonexistent path and falls back, which is the intended behavior.
+	repoRoot := "/home/me/myrepo"
+	relDir := filepath.Join("rel", "feature-login")
+	absDir, err := filepath.Abs(relDir)
+	if err != nil {
+		t.Fatalf("Abs: %v", err)
+	}
+	m, g, _ := newTestManager(repoRoot)
+	g.worktrees = []GitWorktree{
+		{Path: repoRoot, Branch: "refs/heads/main"},
+		{Path: absDir, Branch: "refs/heads/wt/feature-login"},
+	}
+	res, err := m.Add(relDir, AddOptions{})
+	if err != nil {
+		t.Fatalf("Add relative dir: %v", err)
+	}
+	if res.Branch != "wt/feature-login-v001" {
+		t.Errorf("branch = %q, want wt/feature-login-v001 (derive triggers after dir normalization)", res.Branch)
+	}
+}
+
 func TestAdd_DeriveMode_MainRootRegression(t *testing.T) {
 	// dir == MainRoot: matched worktree entry is the main one → today's behavior.
 	m, _, _ := newTestManager("/home/me/myrepo")
