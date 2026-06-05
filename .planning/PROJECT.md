@@ -21,16 +21,17 @@ Running `wt new` from inside a worktree creates a new branch + worktree based on
 - ✓ Remove a worktree (`wt rm`) with safe branch delete + empty-parent pruning; `kill-em-all` bulk cleanup — existing
 - ✓ Lifecycle hooks (pre/post create + remove) with `WT_*` env context — existing
 - ✓ Config (`wt init` / `wt set`), shell completion — existing
+- ✓ `wt new` from inside a worktree derives the new branch from that worktree's current branch (auto-detected by cwd; main-root behavior unchanged) — Validated in Phase 1
+- ✓ Default naming appends a zero-padded `-vNNN` suffix, choosing the lowest free number and skipping any whose branch already exists — Validated in Phase 1
+- ✓ A positional token (`wt new -- -patch01`) is appended literally as a suffix to the current branch name, replacing the auto-number — Validated in Phase 1
+- ✓ The new branch is created from the committed tip of the current worktree's branch; the new worktree lands in the main repo's container — Validated in Phase 1
+- ✓ A custom-token name that already exists fails with a clear error instead of silently picking another name — Validated in Phase 1
 
 ### Active
 
 <!-- This milestone. Building toward these. -->
 
-- [ ] Running `wt new` from inside a worktree derives the new branch from that worktree's current branch (auto-detected by cwd; main-root behavior unchanged)
-- [ ] Default naming appends a zero-padded `-vNNN` suffix, choosing the lowest free number and skipping any whose branch already exists
-- [ ] A positional token (`wt new "-patch01"`) is appended literally as a suffix to the current branch name, replacing the auto-number
-- [ ] The new branch is created from the committed tip of the current worktree's branch; the new worktree lands in the main repo's container
-- [ ] A custom-token name that already exists fails with a clear error instead of silently picking another name
+(None — milestone v1.0 delivered in Phase 1. Code-review follow-ups tracked below under Key Decisions / see `01-REVIEW.md`.)
 
 ### Out of Scope
 
@@ -58,13 +59,14 @@ Running `wt new` from inside a worktree creates a new branch + worktree based on
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Trigger the new mode by auto-detecting cwd is inside a worktree | Zero-friction; no flag to remember | — Pending |
-| Custom token appended as a literal suffix (not a true prefix) | Matches the leading-dash form the user wrote (`-patch01` → `feature-login-patch01`) | — Pending |
-| Zero-padded suffix width = 3 (`-v001`) | Matches the `vXXX` the user wrote | — Pending |
-| Default `-vNNN` picks the lowest free N, skipping existing branches | Predictable, gap-filling numbering | — Pending |
-| Custom token replaces numbering; collision is an error | User explicitly chose error over auto-bumping | — Pending |
-| Derived branch inherits the parent branch's prefix; `--no-prefix`/`--branch-prefix` don't apply in this mode | Prefix is already part of the parent branch name | — Pending |
-| New branch from committed tip; uncommitted changes not copied | Standard `git worktree add` semantics | — Pending |
+| Trigger the new mode by auto-detecting cwd is inside a worktree | Zero-friction; no flag to remember | ✓ Good — shipped in Phase 1 |
+| Custom token appended as a literal suffix (not a true prefix) | Matches the leading-dash form the user wrote (`-patch01` → `feature-login-patch01`) | ✓ Good — shipped; pass via `wt new -- -patch01` (cobra parses leading dash as a flag otherwise) |
+| Zero-padded suffix width = 3 (`-v001`) | Matches the `vXXX` the user wrote | ✓ Good — shipped in Phase 1 |
+| Default `-vNNN` picks the lowest free N, skipping existing branches | Predictable, gap-filling numbering | ✓ Good — shipped in Phase 1 |
+| Custom token replaces numbering; collision is an error | User explicitly chose error over auto-bumping | ✓ Good — shipped in Phase 1 |
+| Derived branch inherits the parent branch's prefix; `--no-prefix`/`--branch-prefix` don't apply in this mode | Prefix is already part of the parent branch name | ✓ Good — shipped in Phase 1 |
+| New branch from committed tip; uncommitted changes not copied | Standard `git worktree add` semantics | ✓ Good — shipped in Phase 1 |
+| Open code-review follow-ups (advisory, non-blocking) | From `01-REVIEW.md` | ⚠️ Revisit — WR-01 (no-dash token glues with no separator), WR-02 (derive silently disabled when `dir` is relative/symlinked) |
 
 ## Evolution
 
@@ -84,4 +86,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-05 after initialization*
+*Last updated: 2026-06-05 after Phase 1 completion (milestone v1.0 delivered — worktree-derived `wt new`)*
