@@ -134,6 +134,13 @@ func (m *Manager) currentWorktreeBranch(dir, repoRoot string) (parentBranch stri
 // nextFreeVersion returns the lowest free "<parentBranch>-vNNN" suffix (NNN
 // zero-padded to width 3, starting at 1), skipping any candidate whose branch
 // already exists. It fills gaps: with only -v002 present it returns -v001.
+//
+// This relies on BranchExists treating operational git errors (lock
+// contention, a corrupt ref) as "absent" rather than surfacing them. A
+// transient git failure could therefore be misread as a free slot and yield a
+// candidate that actually exists; the subsequent git worktree add would then
+// fail with a less clear downstream error. Distinguishing "absent" from "git
+// errored" in the GitRunner interface is out of scope for this change.
 func (m *Manager) nextFreeVersion(repoRoot, parentBranch string) string {
 	for n := 1; ; n++ {
 		candidate := fmt.Sprintf("%s-v%03d", parentBranch, n)
