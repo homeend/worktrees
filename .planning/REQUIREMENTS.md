@@ -1,0 +1,65 @@
+# Requirements: wt — Worktree-Derived `new`
+
+**Defined:** 2026-06-05
+**Core Value:** Running `wt new` from inside a worktree creates a new branch + worktree based on the current worktree's branch, auto-named with a free `-vNNN` suffix (or a caller-supplied suffix), without returning to the repo root or naming the branch by hand.
+
+## v1 Requirements
+
+Requirements for this milestone. Each maps to a roadmap phase.
+
+### Mode Detection
+
+- [ ] **DETECT-01**: When `wt new` is run from inside a managed (non-main) worktree, it derives the new branch from that worktree's current branch instead of `base_ref`/HEAD
+- [ ] **DETECT-02**: When `wt new` is run from the main repo root, behavior is unchanged (branches off `base_ref`/HEAD as today)
+
+### Branch Derivation
+
+- [ ] **DERIVE-01**: The new branch is created from the committed tip of the current worktree's branch (uncommitted working-tree changes are not carried over)
+- [ ] **DERIVE-02**: The new worktree is created in the main repo's worktree container, mirroring the full branch path — not nested under the current worktree
+- [ ] **DERIVE-03**: The derived branch keeps the parent branch's existing prefix verbatim; `--no-prefix` / `--branch-prefix` are not applied in worktree-derive mode
+
+### Naming
+
+- [ ] **NAME-01**: With no positional token, the new branch and worktree are named `<current-branch>-vNNN` with a zero-padded 3-digit number (e.g. `feature-login-v001`)
+- [ ] **NAME-02**: The `-vNNN` number is the lowest value ≥ 1 whose branch does not already exist (existing numbers are skipped, gaps are filled)
+- [ ] **NAME-03**: A positional token (e.g. `wt new "-patch01"`) is appended literally as a suffix to the current branch name (`feature-login-patch01`), replacing the auto-number
+- [ ] **NAME-04**: A custom-token name whose branch already exists fails with a clear error rather than silently renaming or auto-bumping
+
+## v2 Requirements
+
+None deferred for this milestone.
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Copying uncommitted/working-tree changes into the new worktree | New branch starts from the committed tip; standard `git worktree add` semantics |
+| Prepending the token as a true prefix (`patch01-feature-login`) | Decided to append as a literal suffix instead |
+| Applying `--no-prefix` / `--branch-prefix` in worktree-derive mode | Parent branch already carries its prefix, inherited verbatim |
+| Nesting the new worktree under the current worktree | It goes in the shared main-repo container, same as today |
+| Configurable suffix width / numbering format | Fixed at zero-padded 3 digits (`vXXX`) for this milestone |
+
+## Traceability
+
+Populated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DETECT-01 | TBD | Pending |
+| DETECT-02 | TBD | Pending |
+| DERIVE-01 | TBD | Pending |
+| DERIVE-02 | TBD | Pending |
+| DERIVE-03 | TBD | Pending |
+| NAME-01 | TBD | Pending |
+| NAME-02 | TBD | Pending |
+| NAME-03 | TBD | Pending |
+| NAME-04 | TBD | Pending |
+
+**Coverage:**
+- v1 requirements: 9 total
+- Mapped to phases: 0 (roadmap pending)
+- Unmapped: 9 ⚠️
+
+---
+*Requirements defined: 2026-06-05*
+*Last updated: 2026-06-05 after initial definition*
