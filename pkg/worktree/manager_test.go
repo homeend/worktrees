@@ -328,6 +328,22 @@ func TestAdd_DeriveMode_CustomToken(t *testing.T) {
 	}
 }
 
+func TestAdd_DeriveMode_BareTokenGetsSeparator(t *testing.T) {
+	// A token without a leading dash must have the "-" separator inserted so it
+	// does not glue onto the parent branch (no "wt/feature-loginfix").
+	m, _, wtDir := deriveManager(t)
+	res, err := m.Add(wtDir, AddOptions{Name: "fix"})
+	if err != nil {
+		t.Fatalf("Add bare token: %v", err)
+	}
+	if res.Branch != "wt/feature-login-fix" {
+		t.Errorf("branch = %q, want wt/feature-login-fix (separator inserted)", res.Branch)
+	}
+	if res.BaseRef != "wt/feature-login" {
+		t.Errorf("baseRef = %q, want wt/feature-login", res.BaseRef)
+	}
+}
+
 func TestAdd_DeriveMode_CustomTokenCollisionErrors(t *testing.T) {
 	m, g, wtDir := deriveManager(t)
 	g.branches["wt/feature-login-patch01"] = true

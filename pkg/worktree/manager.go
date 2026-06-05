@@ -162,13 +162,20 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	var name, branch, baseRef string
 	switch {
 	case deriveMode:
-		// Auto -vNNN when no token; otherwise append the literal token verbatim
-		// (the user's leading dash is the separator). The parent branch already
-		// carries its prefix, which is inherited as-is — no prefix logic here.
+		// Auto -vNNN when no token; otherwise append the literal token. The
+		// leading dash is the separator: if the caller omits it (e.g. "fix"
+		// rather than "-fix"), it is inserted so the token never glues onto the
+		// parent branch (wt/feature-login + "fix" must not yield
+		// "wt/feature-loginfix"). The parent branch already carries its prefix,
+		// which is inherited as-is — no prefix logic here.
 		if opts.Name == "" {
 			branch = m.nextFreeVersion(repoRoot, parentBranch)
 		} else {
-			branch = parentBranch + opts.Name
+			sep := opts.Name
+			if !strings.HasPrefix(sep, "-") {
+				sep = "-" + sep
+			}
+			branch = parentBranch + sep
 		}
 		name = strings.TrimPrefix(branch, m.cfg.BranchPrefix())
 	case fromExisting:
