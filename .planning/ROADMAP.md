@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Success Criteria** (what must be TRUE):
   1. Running `wt new` with no token from inside a worktree creates a branch and worktree named `<current-branch>-v001`, branched off the committed tip of the current branch and placed in the main repo's worktree container (DETECT-01, DERIVE-01, DERIVE-02, NAME-01).
   2. Running `wt new` repeatedly picks the lowest free `-vNNN` number ≥ 1, skipping numbers whose branch already exists and filling gaps (NAME-02).
-  3. Running `wt new "-patch01"` inside a worktree creates `<current-branch>-patch01`, and if that branch already exists the command fails with a clear collision error instead of renaming or auto-bumping (NAME-03, NAME-04).
+  3. Running `wt new -- "-patch01"` inside a worktree creates `<current-branch>-patch01` (a leading-dash suffix token must follow `--`, since cobra otherwise parses it as a flag), and if that branch already exists the command fails with a clear collision error instead of renaming or auto-bumping (NAME-03, NAME-04).
   4. A derived branch keeps the parent branch's prefix verbatim; passing `--no-prefix` / `--branch-prefix` in worktree-derive mode does not alter the inherited prefix (DERIVE-03).
   5. Running `wt new` from the main repo root branches off `base_ref`/HEAD exactly as today, with no change in naming or placement (DETECT-02).
 **Plans**: 1 plan
