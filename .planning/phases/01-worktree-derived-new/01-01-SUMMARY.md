@@ -84,6 +84,8 @@ Tasks 1 and 2 followed RED → GREEN: a `test(...)` commit with failing tests pr
 
 The single load-bearing control (T-01-01/T-01-02) is the existing `m.git.CheckRefFormat(branch)` gate, reused unchanged on the derived branch — an illegal suffix token is rejected before any branch/worktree creation, so no path traversal is reachable. No new dependencies (T-01-SC). No new threat surface introduced beyond the register.
 
+Note: the `CheckRefFormat` rejection control is structurally present (applied to the derived branch before collision/Add) but **not exercised** by tests — the unit fake's `CheckRefFormat` always returns nil and the integration test feeds only valid tokens. No acceptance criterion required exercising the rejection path; on record here as "control present, not exercised."
+
 ## Deviations from Plan
 
 **1. [Rule 3 - Blocking] Integration test name adjusted to satisfy the plan's `-run Integration` verify filter**
