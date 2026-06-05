@@ -27,10 +27,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Running `wt new "-patch01"` inside a worktree creates `<current-branch>-patch01`, and if that branch already exists the command fails with a clear collision error instead of renaming or auto-bumping (NAME-03, NAME-04).
   4. A derived branch keeps the parent branch's prefix verbatim; passing `--no-prefix` / `--branch-prefix` in worktree-derive mode does not alter the inherited prefix (DERIVE-03).
   5. Running `wt new` from the main repo root branches off `base_ref`/HEAD exactly as today, with no change in naming or placement (DETECT-02).
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md — Derive-mode detection, `-vNNN`/custom-suffix naming, and CLI token passthrough through Manager.Add, with unit + integration tests
 
 ## Progress
 
@@ -39,4 +39,4 @@ Phases execute in numeric order: 1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Worktree-Derived `new` | 0/TBD | Not started | - |
+| 1. Worktree-Derived `new` | 0/1 | Not started | - |
