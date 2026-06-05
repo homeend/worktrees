@@ -24,6 +24,11 @@ type AddOptions struct {
 	FromBranch     string // when set: check out this existing branch instead of cutting a new one
 	NoPrefix       bool   // skip the configured branch prefix
 	PrefixOverride string // override the configured prefix for this run (normalized; ignored if NoPrefix)
+	// FromTemplate is set by the CLI when Name was produced by --template. In
+	// derive mode (Add run from inside a worktree) it suppresses reinterpreting
+	// Name as a literal suffix token, so a template-rendered name falls through
+	// to the normal naming path instead of being appended to the parent branch.
+	FromTemplate bool
 }
 
 // AddResult reports the outcome of Add.

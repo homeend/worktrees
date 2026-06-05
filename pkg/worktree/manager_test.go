@@ -3,6 +3,7 @@ package worktree
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -206,6 +207,199 @@ func TestResolveNames_InvalidTemplateErrors(t *testing.T) {
 	m.digits = func() int { return 1 }
 	if _, _, err := m.resolveNames(AddOptions{}); err == nil {
 		t.Error("invalid name_template should produce an error")
+	}
+}
+
+// deriveManager builds a Manager whose fakeGit reports a single non-main
+// worktree on branch wt/feature-login living in the sibling container, plus the
+// main worktree at the repo root. The current dir is the worktree dir unless a
+// test overrides it. Returns the manager, the fake git, and the worktree dir.
+func deriveManager(t *testing.T) (*Manager, *fakeGit, string) {
+	t.Helper()
+	repoRoot := "/home/me/myrepo"
+	wtDir := "/home/me/myrepo.worktrees/wt/feature-login"
+	m, g, _ := newTestManager(repoRoot)
+	g.worktrees = []GitWorktree{
+		{Path: repoRoot, Branch: "refs/heads/main"},
+		{Path: wtDir, Branch: "refs/heads/wt/feature-login"},
+	}
+	return m, g, wtDir
+}
+
+func TestAdd_DeriveMode_AutoV001(t *testing.T) {
+	m, _, wtDir := deriveManager(t)
+	res, err := m.Add(wtDir, AddOptions{})
+	if err != nil {
+		t.Fatalf("Add derive: %v", err)
+	}
+	if res.Branch != "wt/feature-login-v001" {
+		t.Errorf("branch = %q, want wt/feature-login-v001", res.Branch)
+	}
+	if res.BaseRef != "wt/feature-login" {
+		t.Errorf("baseRef = %q, want wt/feature-login (parent branch tip)", res.BaseRef)
+	}
+	wantPath := filepath.Join("/home/me/myrepo.worktrees", "wt", "feature-login-v001")
+	if res.Path != wantPath {
+		t.Errorf("path = %q, want %q (mirrors full branch under main container)", res.Path, wantPath)
+	}
+}
+
+func TestAdd_DeriveMode_SubdirOfWorktree(t *testing.T) {
+	m, _, wtDir := deriveManager(t)
+	deep := filepath.Join(wtDir, "subdir", "deep")
+	res, err := m.Add(deep, AddOptions{})
+	if err != nil {
+		t.Fatalf("Add from subdir: %v", err)
+	}
+	if res.Branch != "wt/feature-login-v001" {
+		t.Errorf("branch = %q, want wt/feature-login-v001 (parent resolved from subdir)", res.Branch)
+	}
+}
+
+func TestAdd_DeriveMode_SharedPrefixNoFalseMatch(t *testing.T) {
+	repoRoot := "/repo"
+	featDir := "/repo.worktrees/feat"
+	featExtraDir := "/repo.worktrees/feat-extra"
+	mk := func() (*Manager, *fakeGit) {
+		m, g, _ := newTestManager(repoRoot)
+		g.worktrees = []GitWorktree{
+			{Path: repoRoot, Branch: "refs/heads/main"},
+			{Path: featDir, Branch: "refs/heads/wt/feat"},
+			{Path: featExtraDir, Branch: "refs/heads/wt/feat-extra"},
+		}
+		return m, g
+	}
+
+	m, _ := mk()
+	res, err := m.Add(featExtraDir, AddOptions{})
+	if err != nil {
+		t.Fatalf("Add feat-extra: %v", err)
+	}
+	if res.Branch != "wt/feat-extra-v001" {
+		t.Errorf("branch = %q, want wt/feat-extra-v001 (must not false-match feat)", res.Branch)
+	}
+
+	m2, _ := mk()
+	res2, err := m2.Add(featDir, AddOptions{})
+	if err != nil {
+		t.Fatalf("Add feat: %v", err)
+	}
+	if res2.Branch != "wt/feat-v001" {
+		t.Errorf("branch = %q, want wt/feat-v001 (must match feat, not feat-extra)", res2.Branch)
+	}
+}
+
+func TestAdd_DeriveMode_GapFill(t *testing.T) {
+	// -v001 and -v002 exist → next is -v003.
+	m, g, wtDir := deriveManager(t)
+	g.branches["wt/feature-login-v001"] = true
+	g.branches["wt/feature-login-v002"] = true
+	res, err := m.Add(wtDir, AddOptions{})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if res.Branch != "wt/feature-login-v003" {
+		t.Errorf("branch = %q, want wt/feature-login-v003", res.Branch)
+	}
+
+	// Only -v002 exists → lowest free is -v001 (fills the gap).
+	m2, g2, wtDir2 := deriveManager(t)
+	g2.branches["wt/feature-login-v002"] = true
+	res2, err := m2.Add(wtDir2, AddOptions{})
+	if err != nil {
+		t.Fatalf("Add gap: %v", err)
+	}
+	if res2.Branch != "wt/feature-login-v001" {
+		t.Errorf("branch = %q, want wt/feature-login-v001 (lowest free)", res2.Branch)
+	}
+}
+
+func TestAdd_DeriveMode_CustomToken(t *testing.T) {
+	m, _, wtDir := deriveManager(t)
+	res, err := m.Add(wtDir, AddOptions{Name: "-patch01"})
+	if err != nil {
+		t.Fatalf("Add custom token: %v", err)
+	}
+	if res.Branch != "wt/feature-login-patch01" {
+		t.Errorf("branch = %q, want wt/feature-login-patch01 (literal suffix)", res.Branch)
+	}
+	if res.BaseRef != "wt/feature-login" {
+		t.Errorf("baseRef = %q, want wt/feature-login", res.BaseRef)
+	}
+}
+
+func TestAdd_DeriveMode_CustomTokenCollisionErrors(t *testing.T) {
+	m, g, wtDir := deriveManager(t)
+	g.branches["wt/feature-login-patch01"] = true
+	_, err := m.Add(wtDir, AddOptions{Name: "-patch01"})
+	if err == nil {
+		t.Fatal("expected collision error for existing custom-token branch")
+	}
+	if !strings.Contains(err.Error(), "wt/feature-login-patch01") {
+		t.Errorf("error should name the derived branch, got %q", err)
+	}
+	if strings.Contains(err.Error(), "pass a different --branch") {
+		t.Errorf("derive collision must not use the generic --branch message: %q", err)
+	}
+	if len(g.added) != 0 {
+		t.Errorf("nothing should be created on collision, added=%v", g.added)
+	}
+}
+
+func TestAdd_DeriveMode_IgnoresPrefixAndBaseOverrides(t *testing.T) {
+	m, _, wtDir := deriveManager(t)
+	res, err := m.Add(wtDir, AddOptions{NoPrefix: true, PrefixOverride: "x/", BaseRef: "develop"})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if res.Branch != "wt/feature-login-v001" {
+		t.Errorf("branch = %q, want wt/feature-login-v001 (inherited prefix verbatim)", res.Branch)
+	}
+	if res.BaseRef != "wt/feature-login" {
+		t.Errorf("baseRef = %q, want wt/feature-login (opts.BaseRef ignored in derive mode)", res.BaseRef)
+	}
+}
+
+func TestAdd_DeriveMode_MainRootRegression(t *testing.T) {
+	// dir == MainRoot: matched worktree entry is the main one → today's behavior.
+	m, _, _ := newTestManager("/home/me/myrepo")
+	res, err := m.Add("/home/me/myrepo", AddOptions{Name: "feat"})
+	if err != nil {
+		t.Fatalf("Add main root: %v", err)
+	}
+	if res.Branch != "wt/feat" {
+		t.Errorf("branch = %q, want wt/feat (no derive, no -vNNN)", res.Branch)
+	}
+	if strings.Contains(res.Branch, "-v0") {
+		t.Errorf("main-root branch should not carry a -vNNN suffix: %q", res.Branch)
+	}
+}
+
+func TestAdd_DeriveMode_TemplateFallThrough(t *testing.T) {
+	m, _, wtDir := deriveManager(t)
+	res, err := m.Add(wtDir, AddOptions{Name: "feat/123", FromTemplate: true})
+	if err != nil {
+		t.Fatalf("Add template: %v", err)
+	}
+	if res.Branch != "wt/feat/123" {
+		t.Errorf("branch = %q, want wt/feat/123 (template falls through to today's path)", res.Branch)
+	}
+	if res.BaseRef != "HEAD" {
+		t.Errorf("baseRef = %q, want HEAD (config base, not parent branch)", res.BaseRef)
+	}
+}
+
+func TestAdd_DeriveMode_ExplicitBranchFallThrough(t *testing.T) {
+	m, _, wtDir := deriveManager(t)
+	res, err := m.Add(wtDir, AddOptions{Branch: "feature/foo"})
+	if err != nil {
+		t.Fatalf("Add explicit branch: %v", err)
+	}
+	if res.Branch != "wt/feature/foo" {
+		t.Errorf("branch = %q, want wt/feature/foo (explicit branch falls through)", res.Branch)
+	}
+	if res.BaseRef != "HEAD" {
+		t.Errorf("baseRef = %q, want HEAD", res.BaseRef)
 	}
 }
 
