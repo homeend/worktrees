@@ -12,7 +12,7 @@ This milestone adds one user-facing capability to the existing `wt` CLI: running
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Worktree-Derived `new`** - `wt new` inside a worktree branches off the current branch with auto/custom suffix naming
+- [x] **Phase 1: Worktree-Derived `new`** - `wt new` inside a worktree branches off the current branch with auto/custom suffix naming (completed 2026-06-05)
 
 ## Phase Details
 
@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Derive-mode detection, `-vNNN`/custom-suffix naming, and CLI token passthrough through Manager.Add, with unit + integration tests
+- [x] 01-01-PLAN.md — Derive-mode detection, `-vNNN`/custom-suffix naming, and CLI token passthrough through Manager.Add, with unit + integration tests
 
 ## Progress
 
@@ -39,4 +39,4 @@ Phases execute in numeric order: 1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Worktree-Derived `new` | 0/1 | Not started | - |
+| 1. Worktree-Derived `new` | 1/1 | Complete   | 2026-06-05 |

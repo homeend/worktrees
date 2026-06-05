@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: ROADMAP.md and STATE.md created; REQUIREMENTS.md traceability updated
-last_updated: "2026-06-05T19:35:46.204Z"
-last_activity: 2026-06-05 -- Phase 1 planning complete
+last_updated: "2026-06-05T19:45:43.397Z"
+last_activity: 2026-06-05 -- Phase 01 execution started
 progress:
   total_phases: 1
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-05)
 
 **Core value:** Running `wt new` from inside a worktree creates a new branch + worktree based on the current worktree's branch, auto-named with a free `-vNNN` suffix (or a caller-supplied suffix), without returning to the repo root or naming the branch by hand.
-**Current focus:** Phase 1 — Worktree-Derived `new`
+**Current focus:** Phase 01 — worktree-derived-new
 
 ## Current Position
 
-Phase: 1 of 1 (Worktree-Derived `new`)
-Plan: 0 of TBD in current phase
-Status: Ready to execute
-Last activity: 2026-06-05 -- Phase 1 planning complete
+Phase: 01 (worktree-derived-new) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 01
+Last activity: 2026-06-05 -- Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
