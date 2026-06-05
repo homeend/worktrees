@@ -196,6 +196,14 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 			}
 			branch = parentBranch + sep
 		}
+		// name strips the *currently configured* prefix, not the prefix the
+		// parent branch was created under (which is unrecoverable from the ref
+		// string alone). If --branch-prefix was changed after the parent
+		// worktree was created, this TrimPrefix is a no-op and name (which flows
+		// into AddResult.Name and the WT_NAME hook env var) retains the parent's
+		// stale prefix. Cosmetic only: the created branch and on-disk path are
+		// unaffected. There is no correct alternative without recording the
+		// parent's creation-time prefix.
 		name = strings.TrimPrefix(branch, m.cfg.BranchPrefix())
 	case fromExisting:
 		branch = opts.FromBranch

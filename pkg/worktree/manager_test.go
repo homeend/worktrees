@@ -235,6 +235,9 @@ func TestAdd_DeriveMode_AutoV001(t *testing.T) {
 	if res.Branch != "wt/feature-login-v001" {
 		t.Errorf("branch = %q, want wt/feature-login-v001", res.Branch)
 	}
+	if res.Name != "feature-login-v001" {
+		t.Errorf("name = %q, want feature-login-v001 (derived branch w/o configured prefix)", res.Name)
+	}
 	if res.BaseRef != "wt/feature-login" {
 		t.Errorf("baseRef = %q, want wt/feature-login (parent branch tip)", res.BaseRef)
 	}
