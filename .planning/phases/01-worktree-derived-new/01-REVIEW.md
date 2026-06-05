@@ -15,8 +15,16 @@ findings:
   warning: 3
   info: 2
   total: 5
-status: issues_found
+status: resolved
+fixes_applied: 2026-06-06
 ---
+
+> **Fixes applied 2026-06-06** via `/gsd:code-review 1 --fix` (Critical+Warning scope):
+> WR-01 (separator inserted for non-dash derive token, `a421f4e`), WR-02 (`dir` normalized
+> with `filepath.Abs`+`EvalSymlinks` in `currentWorktreeBranch`, `b6a97df`), WR-03 (doc-comment
+> note on `nextFreeVersion`; `BranchExists` semantics intentionally unchanged, `4061b35`).
+> Info findings IN-01/IN-02 deferred (not in `--fix` scope without `--all`). All gates green
+> (build, vet, gofmt, unit + integration tests).
 
 # Phase 1: Code Review Report
 
