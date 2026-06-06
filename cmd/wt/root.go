@@ -9,11 +9,11 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/code-drill/wt/internal/config"
-	"github.com/code-drill/wt/internal/git"
-	"github.com/code-drill/wt/internal/hooks"
-	"github.com/code-drill/wt/internal/tui"
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/internal/config"
+	"github.com/homeend/worktrees/internal/git"
+	"github.com/homeend/worktrees/internal/hooks"
+	"github.com/homeend/worktrees/internal/tui"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var rootCmd = &cobra.Command{

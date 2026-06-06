@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 func TestExitCodeFor(t *testing.T) {

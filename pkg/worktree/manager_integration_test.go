@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/code-drill/wt/internal/git"
+	"github.com/homeend/worktrees/internal/git"
 )
 
 type gitAdapter struct{ r *git.Runner }

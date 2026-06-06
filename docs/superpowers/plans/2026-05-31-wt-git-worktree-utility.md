@@ -17,7 +17,7 @@
 ## File Structure
 
 ```
-go.mod                              module github.com/code-drill/wt
+go.mod                              module github.com/homeend/worktrees
 go.sum
 main.go                             thin entrypoint -> cmd/wt.Execute()
 
@@ -86,10 +86,10 @@ cmd/wt/
 Run:
 ```bash
 cd /home/homeend/agentos
-go mod init github.com/code-drill/wt
+go mod init github.com/homeend/worktrees
 go mod edit -go=1.23
 ```
-Expected: `go.mod` created with `module github.com/code-drill/wt` and `go 1.23`.
+Expected: `go.mod` created with `module github.com/homeend/worktrees` and `go 1.23`.
 
 - [ ] **Step 2: Create a minimal cobra root so the module compiles**
 
@@ -124,7 +124,7 @@ package main
 import (
 	"os"
 
-	cmd "github.com/code-drill/wt/cmd/wt"
+	cmd "github.com/homeend/worktrees/cmd/wt"
 )
 
 func main() {
@@ -1502,7 +1502,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/code-drill/wt/internal/naming"
+	"github.com/homeend/worktrees/internal/naming"
 )
 
 // Manager orchestrates worktree operations over injected collaborators.
@@ -2047,7 +2047,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/code-drill/wt/internal/git"
+	"github.com/homeend/worktrees/internal/git"
 )
 
 // gitAdapter bridges *git.Runner to the worktree.GitRunner interface.
@@ -2181,7 +2181,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 func writeHook(t *testing.T, dir, name, body string, exec bool) {
@@ -2276,7 +2276,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // Runner runs convention-dir hooks from <repoRoot>/.worktrees/.
@@ -2453,10 +2453,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/internal/config"
-	"github.com/code-drill/wt/internal/git"
-	"github.com/code-drill/wt/internal/hooks"
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/internal/config"
+	"github.com/homeend/worktrees/internal/git"
+	"github.com/homeend/worktrees/internal/hooks"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var rootCmd = &cobra.Command{
@@ -2623,7 +2623,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var (
@@ -2733,7 +2733,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var listJSON bool
@@ -2859,7 +2859,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var (
@@ -2983,7 +2983,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // resolveWorktreePath returns the on-disk path for a named worktree.
@@ -3030,7 +3030,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/internal/git"
+	"github.com/homeend/worktrees/internal/git"
 )
 
 var pruneCmd = &cobra.Command{
@@ -3291,7 +3291,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 func TestModel_QuitOnQ(t *testing.T) {
@@ -3343,7 +3343,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 type model struct {
@@ -3420,7 +3420,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // Run launches the interactive TUI listing worktrees for the given dir.
@@ -3504,7 +3504,7 @@ Run: `go get golang.org/x/term@latest`
 Add imports to `root.go`:
 ```go
 "golang.org/x/term"
-"github.com/code-drill/wt/internal/tui"
+"github.com/homeend/worktrees/internal/tui"
 ```
 
 > Place the `rootCmd.RunE = ...` assignment inside an `init()` in root.go (cobra
@@ -3559,7 +3559,7 @@ lifecycle hooks for copying gitignored files (like `.env`) into new worktrees.
 
 ## Install
 
-	go install github.com/code-drill/wt@latest
+	go install github.com/homeend/worktrees@latest
 
 ## Usage
 
@@ -3617,13 +3617,13 @@ Run:
 ```bash
 tmp=$(mktemp -d) && git -C "$tmp" init -q -b main && \
   git -C "$tmp" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init && \
-  (cd "$tmp" && go run github.com/code-drill/wt new smoke --no-hooks && \
-   go run github.com/code-drill/wt ls && \
-   go run github.com/code-drill/wt rm smoke)
+  (cd "$tmp" && go run github.com/homeend/worktrees new smoke --no-hooks && \
+   go run github.com/homeend/worktrees ls && \
+   go run github.com/homeend/worktrees rm smoke)
 ```
 Expected: creates `smoke`, lists it, removes it without error.
 
-> If `go run github.com/code-drill/wt` fails to resolve in the scratch dir, build
+> If `go run github.com/homeend/worktrees` fails to resolve in the scratch dir, build
 > the binary first (`go build -o /tmp/wt .`) and call `/tmp/wt` instead.
 
 - [ ] **Step 4: Commit**

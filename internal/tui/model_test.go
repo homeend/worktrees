@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // fakeLister stands in for *worktree.Manager in unit tests.

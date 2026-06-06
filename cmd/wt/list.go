@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var listJSON bool

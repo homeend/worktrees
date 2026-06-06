@@ -34,7 +34,7 @@ This repo is not published to a module proxy yet, so install it from the local
 checkout:
 
 ```sh
-cd /home/homeend/agentos     # the directory containing go.mod
+cd ~/worktrees     # the directory containing go.mod
 go install .
 ```
 
@@ -46,11 +46,11 @@ wt --help
 
 ### Option B — install via module path (once published)
 
-After this module is pushed to its remote (`github.com/code-drill/wt`), anyone
+After this module is pushed to its remote (`github.com/homeend/worktrees`), anyone
 can install it without cloning:
 
 ```sh
-go install github.com/code-drill/wt@latest
+go install github.com/homeend/worktrees@latest
 ```
 
 Until then, use Option A.
@@ -62,7 +62,7 @@ Note: `go run` operates on **its own working directory**, so point `wt` at your
 target repo with `--repo`:
 
 ```sh
-cd /home/homeend/agentos
+cd ~/worktrees
 go run . --repo /path/to/your/repo list
 go run . --repo /path/to/your/repo new my-feature
 ```
@@ -73,7 +73,7 @@ go run . --repo /path/to/your/repo new my-feature
 
 ```sh
 # 1. Install (see above)
-cd /home/homeend/agentos && go install .
+cd ~/worktrees && go install .
 
 # 2. Go to any git repository you want worktrees for
 cd ~/projects/myrepo
@@ -410,7 +410,7 @@ clear message instead of producing a bad name.
 When you change `wt`'s source (or pull new commits), reinstall the binary:
 
 ```sh
-cd /home/homeend/agentos
+cd ~/worktrees
 git pull                 # if you track an upstream
 go install .             # rebuild + replace ~/go/bin/wt
 wt --help                # confirm the new build is in use
@@ -419,7 +419,7 @@ wt --help                # confirm the new build is in use
 Once the module is published, updating an installed copy is just:
 
 ```sh
-go install github.com/code-drill/wt@latest
+go install github.com/homeend/worktrees@latest
 ```
 
 To remove the installed binary:

@@ -54,7 +54,7 @@
 **Order (standard Go):**
 1. Standard library: `fmt`, `os`, `path/filepath`, `strings`, `errors`, `time`, `text/template`
 2. Third-party: `github.com/spf13/cobra`, `github.com/charmbracelet/bubbletea`, `gopkg.in/yaml.v3`
-3. Internal project: `github.com/code-drill/wt/internal/...`, `github.com/code-drill/wt/pkg/worktree`
+3. Internal project: `github.com/homeend/worktrees/internal/...`, `github.com/homeend/worktrees/pkg/worktree`
 
 **Import aliases:**
 - Used only to disambiguate: `cryptorand "crypto/rand"` in `cmd/wt/root.go`

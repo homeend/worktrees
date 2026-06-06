@@ -11,7 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // mode is the TUI's interaction state.

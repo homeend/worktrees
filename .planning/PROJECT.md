@@ -42,7 +42,7 @@ Running `wt new` from inside a worktree creates a new branch + worktree based on
 
 ## Context
 
-- Single-binary Go tool (`github.com/code-drill/wt`); commands under `cmd/wt/`, core logic in `pkg/worktree/manager.go`, git ops in `internal/git/`, config in `internal/config/`.
+- Single-binary Go tool (`github.com/homeend/worktrees`); commands under `cmd/wt/`, core logic in `pkg/worktree/manager.go`, git ops in `internal/git/`, config in `internal/config/`.
 - Today `Manager.Add` always resolves `MainRoot(dir)` and branches off `cfg.BaseRef()`/HEAD — cwd does not influence the base. The new mode must detect when `dir` is inside a managed (non-main) worktree and use that worktree's branch as the base.
 - A worktree's branch is discoverable via `GitRunner.ListWorktrees` (each entry carries `Branch`); branch existence checks already exist (`BranchExists`, `ListBranches(dir, prefix)`), which the free-`-vNNN` search can reuse.
 - Codebase map available in `.planning/codebase/` (STACK, ARCHITECTURE, STRUCTURE, CONVENTIONS, TESTING, INTEGRATIONS, CONCERNS).

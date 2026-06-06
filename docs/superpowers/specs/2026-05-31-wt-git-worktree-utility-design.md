@@ -42,7 +42,7 @@ freely, then tear it down cleanly when done.
 | CLI framework | cobra |
 | TUI framework | Bubble Tea + Lipgloss |
 | Binary name | `wt` |
-| Module path | `github.com/code-drill/wt` |
+| Module path | `github.com/homeend/worktrees` |
 | Min Go | 1.23 |
 | Min git | 2.30+ (needs `worktree list --porcelain -z`, `--path-format`); probed at startup |
 | Layout | Container sibling of **main** repo root: `<repo>.worktrees/<name>/` |

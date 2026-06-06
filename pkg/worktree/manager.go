@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/code-drill/wt/internal/naming"
+	"github.com/homeend/worktrees/internal/naming"
 )
 
 // Manager orchestrates worktree operations over injected collaborators.

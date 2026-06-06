@@ -556,7 +556,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/code-drill/wt/internal/config"
+	"github.com/homeend/worktrees/internal/config"
 )
 
 func TestRunSet_Writes(t *testing.T) {
@@ -606,7 +606,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/internal/config"
+	"github.com/homeend/worktrees/internal/config"
 )
 
 var setSafe bool
@@ -1161,7 +1161,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // fakeKiller implements the killer interface used by runKillEmAll.
@@ -1229,7 +1229,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var killYes bool

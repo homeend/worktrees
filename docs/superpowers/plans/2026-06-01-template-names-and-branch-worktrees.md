@@ -709,7 +709,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 var (
@@ -850,7 +850,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 func TestPrintTemplates_Lists(t *testing.T) {
@@ -902,7 +902,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // printTemplates writes a tab-aligned table of templates (extracted for testing).

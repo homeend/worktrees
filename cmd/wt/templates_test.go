@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 func TestPrintTemplates_Lists(t *testing.T) {

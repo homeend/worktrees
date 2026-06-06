@@ -5,7 +5,7 @@
 ## Directory Layout
 
 ```
-worktrees/                        # module: github.com/code-drill/wt
+worktrees/                        # module: github.com/homeend/worktrees
 ├── main.go                       # Binary entry point (3 lines)
 ├── go.mod                        # Module definition + dependency pinning
 ├── go.sum                        # Dependency checksums

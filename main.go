@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	cmd "github.com/code-drill/wt/cmd/wt"
+	cmd "github.com/homeend/worktrees/cmd/wt"
 )
 
 func main() {

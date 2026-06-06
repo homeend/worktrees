@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/code-drill/wt/internal/git"
+	"github.com/homeend/worktrees/internal/git"
 )
 
 var pruneCmd = &cobra.Command{

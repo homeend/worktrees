@@ -1,4 +1,4 @@
-module github.com/code-drill/wt
+module github.com/homeend/worktrees
 
 go 1.25.0
 

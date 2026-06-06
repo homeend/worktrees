@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/code-drill/wt/pkg/worktree"
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 // fakeKiller implements the killer interface used by runKillEmAll.

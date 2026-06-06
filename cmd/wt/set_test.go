@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/code-drill/wt/internal/config"
+	"github.com/homeend/worktrees/internal/config"
 )
 
 func TestRunSet_Writes(t *testing.T) {

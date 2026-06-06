@@ -9,3 +9,7 @@
 
 # built binary
 /wt
+/wt.exe
+
+/worktrees
+/worktrees.exe
