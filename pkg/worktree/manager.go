@@ -113,11 +113,10 @@ func (m *Manager) currentWorktreeBranch(dir, repoRoot string) (parentBranch stri
 	if err != nil {
 		return "", false
 	}
-	sep := string(os.PathSeparator)
 	best := ""
 	bestBranch := ""
 	for _, w := range worktrees {
-		if dir != w.Path && !strings.HasPrefix(dir, w.Path+sep) {
+		if !hasPathPrefix(dir, w.Path) {
 			continue
 		}
 		if len(w.Path) > len(best) {
@@ -125,7 +124,7 @@ func (m *Manager) currentWorktreeBranch(dir, repoRoot string) (parentBranch stri
 			bestBranch = w.Branch
 		}
 	}
-	if best == "" || best == repoRoot || bestBranch == "" {
+	if best == "" || pathsEqual(best, repoRoot) || bestBranch == "" {
 		return "", false
 	}
 	return strings.TrimPrefix(bestBranch, "refs/heads/"), true
@@ -316,9 +315,11 @@ func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
 	container := m.containerPath(repoRoot)
 	out := make([]WorktreeInfo, 0, len(raw))
 	for _, w := range raw {
-		isMain := w.Path == repoRoot
-		inContainer := w.Path == container ||
-			strings.HasPrefix(w.Path, container+string(filepath.Separator))
+		// pathsEqual/hasPathPrefix tolerate the separator and drive-letter-case
+		// differences between git-emitted paths and filepath-built ones on
+		// Windows; a byte-for-byte comparison would filter everything out there.
+		isMain := pathsEqual(w.Path, repoRoot)
+		inContainer := hasPathPrefix(w.Path, container)
 		if !isMain && !inContainer {
 			continue
 		}
@@ -353,7 +354,7 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 	wantBranch := "refs/heads/" + prefix + nameNoPrefix
 	leaf := filepath.Base(filepath.FromSlash(name))
 	for _, w := range list {
-		rel := filepath.ToSlash(strings.TrimPrefix(w.Path, container+string(filepath.Separator)))
+		rel := relUnder(w.Path, container)
 		byBranch := w.Branch == wantBranch || w.Branch == "refs/heads/"+name
 		byPath := rel == name || rel == prefix+nameNoPrefix || rel == nameNoPrefix
 		byLeaf := filepath.Base(w.Path) == leaf
@@ -371,8 +372,8 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 // walking up to (but not including) the container. The first non-empty parent
 // (os.Remove fails) stops the walk.
 func (m *Manager) pruneEmptyParents(container, worktreePath string) {
-	for parent := filepath.Dir(worktreePath); parent != container &&
-		strings.HasPrefix(parent, container+string(filepath.Separator)); parent = filepath.Dir(parent) {
+	for parent := filepath.Dir(worktreePath); !pathsEqual(parent, container) &&
+		hasPathPrefix(parent, container); parent = filepath.Dir(parent) {
 		if err := os.Remove(parent); err != nil {
 			break
 		}
