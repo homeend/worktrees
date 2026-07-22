@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -19,6 +20,28 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "wt",
 	Short: "Fast git worktree management with lifecycle hooks",
+	Long:  rootLongFor(runtime.GOOS),
+}
+
+// rootLongFor returns the root help text for the given GOOS. The shell
+// integration guidance differs: POSIX shells install a function via
+// shell-init (that command only exists on POSIX builds), while on Windows
+// the wt.cmd wrapper next to wt.bin.exe covers cd-on-Enter.
+func rootLongFor(goos string) string {
+	base := `Fast git worktree management with lifecycle hooks.
+
+Run bare wt in a terminal to open the interactive TUI. Pressing Enter on a
+worktree quits and prints its path — and cds your shell into it once the
+shell integration is installed:
+
+`
+	if goos == "windows" {
+		return base + `  add the built bin\ directory to PATH: typing wt then runs the wt.cmd
+  wrapper, which launches the wt.bin.exe next to it and performs the cd.`
+	}
+	return base + `  wt shell-init zsh --install   (or: bash; then restart the shell)
+
+See "wt shell-init --help" for details.`
 }
 
 var repoFlag string
