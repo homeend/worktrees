@@ -127,6 +127,7 @@ func templateSlice(cfg config.Config) []worktree.Template {
 
 // Execute runs the root command and returns a process exit code.
 func Execute() int {
+	maybeSelfInstall()
 	if err := rootCmd.Execute(); err != nil {
 		err = classify(err)
 		fmt.Fprintln(os.Stderr, "error:", err)

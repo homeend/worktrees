@@ -37,12 +37,19 @@ checkout:
 ```sh
 cd ~/worktrees     # the directory containing go.mod
 go install .
+worktrees          # first run: self-installs the wt entry points
 ```
 
-That builds and installs the `wt` binary to `~/go/bin/wt`. Verify:
+`go install` names the binary `worktrees`. On its first run under that full
+name it bootstraps the `wt` layout next to itself in `~/go/bin`: a copy of
+the binary as `wt.bin` (`wt.bin.exe` on Windows) plus the `wt` entry point
+(`wt.cmd` on Windows — deliberately no `wt.exe`, which would shadow the
+wrapper in cmd's lookup). A later `go install` upgrade is picked up the next
+time you run `worktrees`. Verify, then wire up cd-on-Enter:
 
 ```sh
 wt --help
+wt shell-init zsh --install    # bash/zsh; Windows cmd needs nothing extra
 ```
 
 ### Option B — install via module path (once published)
