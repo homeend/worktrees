@@ -25,6 +25,8 @@ var repoFlag string
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&repoFlag, "repo", "r", "", "source repo (default: current dir)")
+	rootCmd.PersistentFlags().StringVar(&cdFileFlag, "cd-file", "",
+		"write the worktree path selected in the TUI to this file (for shell cd wrappers)")
 
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		isTTY := term.IsTerminal(int(os.Stdout.Fd()))
@@ -35,7 +37,11 @@ func init() {
 		if err != nil {
 			return err
 		}
-		return tui.Run(m, cwd)
+		sel, err := tui.Run(m, cwd)
+		if err != nil {
+			return err
+		}
+		return emitSelection(sel)
 	}
 }
 

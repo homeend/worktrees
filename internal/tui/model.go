@@ -54,6 +54,11 @@ type model struct {
 	status    string
 	input     string
 
+	// selected is the worktree path chosen with Enter. The CLI layer reads it
+	// after the program quits and hands it to a shell cd wrapper (a child
+	// process cannot change its parent shell's cwd itself).
+	selected string
+
 	// runAction launches a `wt` subcommand in the foreground, handing the
 	// terminal over so hook output renders cleanly, then reports completion.
 	// Injectable so tests can assert the command without spawning a process.
@@ -207,6 +212,15 @@ func (m *model) clampCursor() {
 func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "enter":
+		// Select the worktree under the cursor and quit so the shell wrapper
+		// can cd into it.
+		it, ok := m.current()
+		if !ok {
+			return m, nil
+		}
+		m.selected = it.Path
 		return m, tea.Quit
 	case "down", "j":
 		if m.cursor < len(m.items)-1 {

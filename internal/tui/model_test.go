@@ -260,6 +260,46 @@ func TestTemplates_AnyKeyReturns(t *testing.T) {
 	}
 }
 
+func TestEnter_SelectsWorktreeAndQuits(t *testing.T) {
+	m, rec := newTestModel(sample())
+	down, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown}) // move to /repo.worktrees/feat
+	done, cmd := down.(model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := done.(model).selected; got != "/repo.worktrees/feat" {
+		t.Errorf("selected = %q, want /repo.worktrees/feat", got)
+	}
+	if cmd == nil {
+		t.Fatal("Enter should return a quit command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("Enter command should produce tea.QuitMsg, got %T", cmd())
+	}
+	if len(*rec) != 0 {
+		t.Errorf("Enter should not dispatch an action, got %v", *rec)
+	}
+}
+
+func TestEnter_OnMainSelectsRepoRoot(t *testing.T) {
+	m, _ := newTestModel(sample()) // cursor starts on /repo (main)
+	done, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := done.(model).selected; got != "/repo" {
+		t.Errorf("selected = %q, want /repo", got)
+	}
+	if cmd == nil {
+		t.Fatal("Enter on main should still quit (cd to repo root)")
+	}
+}
+
+func TestEnter_EmptyListDoesNothing(t *testing.T) {
+	m := newModel(&fakeLister{}, "/repo", nil, nil)
+	done, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := done.(model).selected; got != "" {
+		t.Errorf("selected = %q, want empty", got)
+	}
+	if cmd != nil {
+		t.Error("Enter with no items should not quit")
+	}
+}
+
 func TestActionFinished_TriggersReload(t *testing.T) {
 	m, _ := newTestModel(sample())
 	_, cmd := m.Update(actionFinishedMsg{})

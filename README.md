@@ -126,6 +126,7 @@ Keys:
 | Key       | Action                                              |
 |-----------|-----------------------------------------------------|
 | `↑`/`↓` (or `k`/`j`) | move the cursor                          |
+| `Enter`   | select the worktree and quit — prints its path, and with the [shell wrapper](#shell-integration--cd-on-enter) installed your shell cd's into it |
 | `n`       | create a new worktree (auto-generated name)         |
 | `b`       | create a worktree from an existing branch (type the branch name, Enter) |
 | `t`       | view configured branch templates                    |
@@ -145,6 +146,32 @@ always find it.
 
 > The TUI only opens when stdout is a real terminal; piped/non-interactive
 > invocation prints help instead.
+
+### Shell integration — cd on Enter
+
+A child process can never change its parent shell's directory, so the
+"transport me there" step needs a tiny wrapper: `wt` is invoked with
+`--cd-file <tmpfile>`, writes the path you selected with Enter into it, and
+the wrapper cd's after `wt` exits (the same pattern fzf, lazygit and yazi
+use).
+
+**bash / zsh** — source the function from your rc file:
+
+```sh
+# ~/.bashrc or ~/.zshrc
+source /path/to/wt/shell/wt.sh
+```
+
+**cmd.exe** — use `shell/wt.cmd`. Either place it in a `PATH` directory that
+is searched *before* the one holding `wt.exe` (within one directory cmd
+prefers `.exe` over `.cmd`), or define a macro:
+
+```bat
+doskey wt="T:\path\to\wt\shell\wt.cmd" $*
+```
+
+Without a wrapper, Enter still quits the TUI and prints the selected path so
+you can cd by hand.
 
 ---
 

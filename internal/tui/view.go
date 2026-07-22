@@ -57,7 +57,7 @@ func (m model) View() string {
 		}
 		b.WriteString("\n" + statusStyle.Render("press any key to return") + "\n")
 	default:
-		b.WriteString("↑/↓ move • n new • b from-branch • t templates • d delete • K kill-all • q quit\n")
+		b.WriteString("↑/↓ move • enter cd • n new • b from-branch • t templates • d delete • K kill-all • q quit\n")
 	}
 
 	if m.status != "" {
