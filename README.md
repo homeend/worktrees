@@ -81,7 +81,7 @@ go run . --repo /path/to/your/repo new my-feature
 
 ```sh
 # 1. Install (see above)
-cd ~/worktrees && go install .
+cd ~/worktrees && go install . && worktrees   # first run self-installs wt
 
 # 2. Go to any git repository you want worktrees for
 cd ~/projects/myrepo
@@ -112,14 +112,13 @@ wt rm my-feature
 
 ### Shell `cd` helper
 
-A program can't change its parent shell's directory, so `wt` prints the path and
-you `cd` to it. Add this function to your `~/.bashrc` / `~/.zshrc`:
+The full integration is [shell integration — cd on Enter](#shell-integration--cd-on-enter)
+(`wt shell-init zsh --install`): plain `wt` then transports your shell on
+Enter. If all you want is a quick jump by name, this one-liner also works:
 
 ```sh
-wtcd() { cd "$(wt path "$1")"; }
+wtcd() { cd "$(wt path "$1")"; }   # wtcd my-feature
 ```
-
-Then `wtcd my-feature` jumps straight into the worktree.
 
 ---
 
@@ -248,12 +247,16 @@ Kept branch my-feature (unmerged). Delete with: wt rm my-feature --force-branch,
 ### Removing everything — `wt kill-em-all`
 
 `wt kill-em-all` is a destructive clean-slate cleanup: it **force-removes every
-worktree** in the repo's container and **force-deletes every branch matching the
-configured prefix** (default `wt/`), *including orphan branches with no
-worktree*. Removal is forced regardless of committed/uncommitted state. The main
-worktree and any non-prefixed branch (e.g. `main`) are never touched.
+worktree** in the repo's container and **force-deletes each one's branch**.
+Removal is forced regardless of committed/uncommitted state. The main worktree
+and its branch are never touched; branches without a container worktree are
+not swept (there is no branch prefix to identify them by).
 
 - **Lifecycle hooks are skipped** (a notice is printed).
+- Safe to run from **inside** a worktree: the process moves itself out first
+  (a directory that is any process's cwd cannot be deleted on Windows), and
+  with the shell wrapper installed your shell is transported to the repo root
+  when the directory it stood in was removed.
 - Without `--yes`, it prints what will be removed and asks `y/N` when stdout is a
   terminal; with no terminal it refuses and tells you to pass `--yes`.
 - It is **best-effort**: a failure on one item is reported in the summary and
@@ -324,8 +327,8 @@ This creates a commented `.wt.toml` at the repo root and a `.wt/` directory
 ```
 
 A hook runs only if it **exists and is executable** (`chmod +x`). Any
-interpreter works via the shebang line. Skip all hooks for one command with
-`--no-hooks`.
+interpreter works via the shebang line. `wt rm --no-hooks` skips them for a
+removal; `kill-em-all` always skips them.
 
 ### When each hook runs and its working directory
 
@@ -350,8 +353,8 @@ Every hook receives these variables:
 |-------------------|--------------------------------------------------|
 | `WT_SOURCE_ROOT`  | the main repository root                         |
 | `WT_TARGET_ROOT`  | the worktree's root directory                    |
-| `WT_NAME`         | worktree name (no `wt/` prefix)                  |
-| `WT_BRANCH`       | branch name (includes the `wt/` prefix)          |
+| `WT_NAME`         | the branch name (same as `WT_BRANCH`)            |
+| `WT_BRANCH`       | branch name                                      |
 | `WT_BASE_REF`     | the ref the branch was cut from                  |
 | `WT_CONTAINER`    | the container directory (`<repo>.worktrees`)     |
 | `WT_REPO_NAME`    | the repository's basename                        |
@@ -452,20 +455,21 @@ When you change `wt`'s source (or pull new commits), reinstall the binary:
 ```sh
 cd ~/worktrees
 git pull                 # if you track an upstream
-go install .             # rebuild + replace ~/go/bin/wt
+go install .             # rebuild + replace ~/go/bin/worktrees
+worktrees                # refreshes the wt entry points next to it
 wt --help                # confirm the new build is in use
 ```
 
 Once the module is published, updating an installed copy is just:
 
 ```sh
-go install github.com/homeend/worktrees@latest
+go install github.com/homeend/worktrees@latest && worktrees
 ```
 
-To remove the installed binary:
+To remove the installed binaries:
 
 ```sh
-rm "$(go env GOPATH)/bin/wt"
+cd "$(go env GOPATH)/bin" && rm -f worktrees wt wt.bin
 ```
 
 ---
