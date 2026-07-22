@@ -83,19 +83,25 @@ func runKillEmAll(k killer, repoRoot string, opts killOpts, out io.Writer) error
 
 var killEmAllCmd = &cobra.Command{
 	Use:   "kill-em-all",
-	Short: "Remove ALL worktrees and prefixed branches (destructive)",
+	Short: "Remove ALL container worktrees and their branches (destructive)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m, cwd, err := managerForWorkdir()
+		m, _, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}
+		// Resolved before the removals: cwd may be inside a worktree being
+		// deleted and no longer exist afterwards.
+		repoRoot, rootErr := repoRootFor(cwd)
 		opts := killOpts{
 			yes:   killYes,
 			isTTY: term.IsTerminal(int(os.Stdout.Fd())),
 			in:    os.Stdin,
 		}
-		return runKillEmAll(m, cwd, opts, os.Stdout)
+		if err := runKillEmAll(m, cwd, opts, os.Stdout); err != nil {
+			return err
+		}
+		return escapeDeadCwd(cwd, repoRoot, rootErr)
 	},
 }
 

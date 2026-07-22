@@ -7,11 +7,9 @@ type GitRunner interface {
 	CheckRefFormat(branch string) error
 	BranchExists(dir, branch string) bool
 	AddWorktree(dir, path, branch, base string) error
-	AddWorktreeExisting(dir, path, branch string) error
 	ListWorktrees(dir string) ([]GitWorktree, error)
 	RemoveWorktree(dir, path string, force bool) error
 	DeleteBranch(dir, branch string, force bool) (bool, error)
-	ListBranches(dir, prefix string) ([]string, error)
 	Prune(dir string) error
 }
 
@@ -53,11 +51,9 @@ type HookRunner interface {
 	Run(ctx HookContext) error
 }
 
-// ConfigProvider supplies resolved configuration for a repo.
+// ConfigProvider supplies resolved configuration for a repo. Template
+// handling lives in the CLI layer; the Manager only needs these two values.
 type ConfigProvider interface {
 	BaseRef() string
-	Container() string    // "" => default sibling container
-	NameTemplate() string // "" => default generated name pattern
-	BranchPrefix() string // "" => caller falls back to default
-	Templates() []Template
+	Container() string // "" => default sibling container
 }

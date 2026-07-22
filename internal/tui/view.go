@@ -44,8 +44,8 @@ func (m model) View() string {
 		}
 		b.WriteString(promptStyle.Render(
 			fmt.Sprintf("Remove ALL %d worktrees and their branches? Hooks skipped. (y/n)", n)) + "\n")
-	case modeInputBranch:
-		b.WriteString(promptStyle.Render("New worktree from branch (Enter create, Esc cancel):") + "\n")
+	case modeInputName:
+		b.WriteString(promptStyle.Render("New worktree name (Enter create, Esc cancel):") + "\n")
 		b.WriteString("  " + m.input + "_\n")
 	case modeTemplates:
 		b.WriteString(titleStyle.Render("Templates") + "\n")
@@ -55,9 +55,17 @@ func (m model) View() string {
 		for i, tpl := range m.templates {
 			b.WriteString(fmt.Sprintf("  %d  %s  %s\n", i+1, tpl.Name, tpl.Template))
 		}
-		b.WriteString("\n" + statusStyle.Render("press any key to return") + "\n")
+		b.WriteString("\n" + statusStyle.Render("press 1-9 to create from a template • any other key to return") + "\n")
+	case modeInputVar:
+		label := ""
+		if len(m.varVals) < len(m.varLabels) {
+			label = m.varLabels[len(m.varVals)]
+		}
+		b.WriteString(promptStyle.Render(fmt.Sprintf(
+			"template %s — %s (Enter next, Esc cancel):", m.pendingTmpl.Name, label)) + "\n")
+		b.WriteString("  " + m.input + "_\n")
 	default:
-		b.WriteString("↑/↓ move • enter cd • n new • b from-branch • t templates • d delete • K kill-all • q quit\n")
+		b.WriteString("↑/↓ move • enter cd • n new • t templates • d delete • K kill-all • q quit\n")
 	}
 
 	if m.status != "" {

@@ -22,7 +22,7 @@ var pathCmd = &cobra.Command{
 	Short: "Print the path of a worktree (for shell cd)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m, cwd, err := managerForWorkdir()
+		m, _, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}

@@ -13,7 +13,6 @@ type fakeGit struct {
 	removedPaths    []string
 	deleted         []string
 	deleteOK        bool
-	listBranches    []string
 	removeWtErr     map[string]error // keyed by path
 	deleteBranchErr map[string]error // keyed by branch
 	pruned          bool
@@ -30,8 +29,7 @@ func (f *fakeGit) BranchExists(_, b string) bool   { return f.branches[b] }
 func (f *fakeGit) ListWorktrees(string) ([]GitWorktree, error) {
 	return f.worktrees, nil
 }
-func (f *fakeGit) ListBranches(_, _ string) ([]string, error) { return f.listBranches, nil }
-func (f *fakeGit) Prune(string) error                         { f.pruned = true; return nil }
+func (f *fakeGit) Prune(string) error { f.pruned = true; return nil }
 
 func (f *fakeGit) AddWorktree(_, path, branch, _ string) error {
 	if f.addErr != nil {
@@ -39,15 +37,6 @@ func (f *fakeGit) AddWorktree(_, path, branch, _ string) error {
 	}
 	f.added = append(f.added, path)
 	f.branches[branch] = true
-	f.worktrees = append(f.worktrees, GitWorktree{Path: path, Branch: "refs/heads/" + branch})
-	return nil
-}
-
-func (f *fakeGit) AddWorktreeExisting(_, path, branch string) error {
-	if f.addErr != nil {
-		return f.addErr
-	}
-	f.added = append(f.added, path)
 	f.worktrees = append(f.worktrees, GitWorktree{Path: path, Branch: "refs/heads/" + branch})
 	return nil
 }
@@ -90,15 +79,9 @@ func (h *fakeHooks) Run(ctx HookContext) error {
 }
 
 type fakeConfig struct {
-	baseRef      string
-	container    string
-	nameTemplate string
-	branchPrefix string
-	templates    []Template
+	baseRef   string
+	container string
 }
 
-func (c fakeConfig) BaseRef() string       { return c.baseRef }
-func (c fakeConfig) Container() string     { return c.container }
-func (c fakeConfig) NameTemplate() string  { return c.nameTemplate }
-func (c fakeConfig) BranchPrefix() string  { return c.branchPrefix }
-func (c fakeConfig) Templates() []Template { return c.templates }
+func (c fakeConfig) BaseRef() string   { return c.baseRef }
+func (c fakeConfig) Container() string { return c.container }

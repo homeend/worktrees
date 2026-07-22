@@ -4,36 +4,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/homeend/worktrees/internal/naming"
 )
 
 // Manager orchestrates worktree operations over injected collaborators.
 type Manager struct {
-	git    GitRunner
-	hooks  HookRunner
-	cfg    ConfigProvider
-	now    func() time.Time
-	digits func() int
+	git   GitRunner
+	hooks HookRunner
+	cfg   ConfigProvider
 }
 
-// New constructs a Manager with default time/random sources.
+// New constructs a Manager.
 func New(g GitRunner, h HookRunner, c ConfigProvider) *Manager {
-	return &Manager{
-		git:    g,
-		hooks:  h,
-		cfg:    c,
-		now:    time.Now,
-		digits: defaultDigits,
-	}
+	return &Manager{git: g, hooks: h, cfg: c}
 }
-
-// SetDigits overrides the digit source used for generated names (e.g. random in
-// production). Intended for wiring and tests.
-func (m *Manager) SetDigits(fn func() int) { m.digits = fn }
 
 // containerPath returns the worktree container for a repo root. A configured
 // container overrides the default sibling and is used verbatim.
@@ -44,58 +30,32 @@ func (m *Manager) containerPath(repoRoot string) string {
 	return repoRoot + ".worktrees"
 }
 
-// resolveNames computes (name, branch). name omits the wt/ prefix; branch always
-// carries it. An explicit Branch overrides the derived one (still prefixed).
-// When no name is given, it is generated — honoring a configured name_template
-// if set (an invalid template is reported as an error).
-func (m *Manager) resolveNames(opts AddOptions) (name, branch string, err error) {
-	name = opts.Name
-	if name == "" {
-		name, err = naming.GenerateFrom(m.cfg.NameTemplate(), m.now(), m.digits())
-		if err != nil {
-			return "", "", err
-		}
-	}
-	base := opts.Branch
-	if base == "" {
-		base = name
-	}
-	prefix := m.effectivePrefix(opts)
-	branch = prefix + strings.TrimPrefix(base, prefix)
-	return name, branch, nil
-}
-
-// effectivePrefix resolves the branch prefix for this Add: --no-prefix wins and
-// yields none; otherwise a per-run override replaces the configured prefix.
-func (m *Manager) effectivePrefix(opts AddOptions) string {
-	if opts.NoPrefix {
-		return ""
-	}
-	if opts.PrefixOverride != "" {
-		return opts.PrefixOverride
-	}
-	return m.cfg.BranchPrefix()
-}
-
-// worktreePath returns the on-disk path for a branch within the container. The
-// directory mirrors the full branch ref (slashes become nested subdirectories,
-// prefix included).
+// worktreePath returns the on-disk path for a branch within the container.
+// The directory is the branch sanitized into a single flat segment (gg
+// convention: '/' becomes '-'), never nested.
 func (m *Manager) worktreePath(repoRoot, branch string) string {
-	return filepath.Join(m.containerPath(repoRoot), filepath.FromSlash(branch))
+	return filepath.Join(m.containerPath(repoRoot), naming.SanitizeSegment(branch))
 }
 
-func defaultDigits() int {
-	return 1
+// ParentBranch reports the branch of the managed (non-main) worktree that
+// dir lives in, for template rendering (<parent-branch>). ok is false when
+// dir is not inside a managed worktree.
+func (m *Manager) ParentBranch(dir string) (string, bool) {
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return "", false
+	}
+	return m.currentWorktreeBranch(dir, repoRoot)
 }
 
 // currentWorktreeBranch detects whether dir lives inside a managed (non-main)
-// worktree and returns that worktree's branch (prefix included, refs/heads/
-// stripped). It selects the listed worktree whose Path is the longest
-// path-separator-bounded prefix of dir, so a cwd that is a subdirectory of the
-// worktree still resolves, and sibling worktrees sharing a leading string
-// prefix (e.g. "feat" vs "feat-extra") never false-match. It returns ok=false
-// when the matched entry is the main worktree (Path == repoRoot) or has no
-// branch (detached/bare).
+// worktree and returns that worktree's branch (refs/heads/ stripped). It
+// selects the listed worktree whose Path is the longest path-separator-bounded
+// prefix of dir, so a cwd that is a subdirectory of the worktree still
+// resolves, and sibling worktrees sharing a leading string prefix (e.g.
+// "feat" vs "feat-extra") never false-match. It returns ok=false when the
+// matched entry is the main worktree (Path == repoRoot) or has no branch
+// (detached/bare).
 func (m *Manager) currentWorktreeBranch(dir, repoRoot string) (parentBranch string, ok bool) {
 	// git emits worktree paths via --show-toplevel, which are always absolute
 	// and symlink-resolved. dir may arrive non-canonical (a relative --repo, or
@@ -166,31 +126,27 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 		return AddResult{}, fmt.Errorf("resolve repo root: %w", err)
 	}
 
-	fromExisting := opts.FromBranch != ""
-
-	// Derive mode: when Add is run from inside a managed (non-main) worktree and
-	// the caller supplied no explicit branch source, the new branch is derived
-	// from the current worktree's branch. The cheap conditions are checked first
-	// so the explicit/from-branch/template paths never make the extra
-	// ListWorktrees git call and behave exactly as before.
+	// Derive mode: when Add runs from inside a managed (non-main) worktree and
+	// no rendered Branch was supplied, the new branch is derived from the
+	// current worktree's branch. A rendered Branch (template output) wins
+	// everywhere and never derives.
 	deriveMode := false
 	var parentBranch string
-	if !fromExisting && opts.Branch == "" && !opts.FromTemplate {
+	if opts.Branch == "" {
 		if pb, ok := m.currentWorktreeBranch(dir, repoRoot); ok {
 			deriveMode = true
 			parentBranch = pb
 		}
 	}
 
-	var name, branch, baseRef string
+	var branch, baseRef string
 	switch {
 	case deriveMode:
-		// Auto -vNNN when no token; otherwise append the literal token. The
+		// Auto -vNNN when no name; otherwise append the literal name. The
 		// leading dash is the separator: if the caller omits it (e.g. "fix"
-		// rather than "-fix"), it is inserted so the token never glues onto the
-		// parent branch (wt/feature-login + "fix" must not yield
-		// "wt/feature-loginfix"). The parent branch already carries its prefix,
-		// which is inherited as-is — no prefix logic here.
+		// rather than "-fix"), it is inserted so the name never glues onto the
+		// parent branch (feature-login + "fix" must not yield
+		// "feature-loginfix").
 		if opts.Name == "" {
 			branch = m.nextFreeVersion(repoRoot, parentBranch)
 		} else {
@@ -200,23 +156,13 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 			}
 			branch = parentBranch + sep
 		}
-		// name strips the *currently configured* prefix, not the prefix the
-		// parent branch was created under (which is unrecoverable from the ref
-		// string alone). If --branch-prefix was changed after the parent
-		// worktree was created, this TrimPrefix is a no-op and name (which flows
-		// into AddResult.Name and the WT_NAME hook env var) retains the parent's
-		// stale prefix. Cosmetic only: the created branch and on-disk path are
-		// unaffected. There is no correct alternative without recording the
-		// parent's creation-time prefix.
-		name = strings.TrimPrefix(branch, m.cfg.BranchPrefix())
-	case fromExisting:
-		branch = opts.FromBranch
-		name = strings.TrimPrefix(branch, m.cfg.BranchPrefix())
+	case opts.Branch != "":
+		branch = opts.Branch
 	default:
-		name, branch, err = m.resolveNames(opts)
-		if err != nil {
-			return AddResult{}, err
+		if opts.Name == "" {
+			return AddResult{}, fmt.Errorf("branch name required: pass a name or --template (names are never generated)")
 		}
+		branch = opts.Name
 	}
 
 	if err := m.git.CheckRefFormat(branch); err != nil {
@@ -226,32 +172,22 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	switch {
 	case deriveMode:
 		// The auto -vNNN path is collision-free by construction; only the
-		// custom-token path can collide, and that is a hard error (no rename, no
+		// custom-name path can collide, and that is a hard error (no rename, no
 		// auto-bump) with a message that names the derived branch.
 		if opts.Name != "" && m.git.BranchExists(repoRoot, branch) {
 			return AddResult{}, fmt.Errorf("derived branch %q already exists", branch)
 		}
-		// In derive mode the base is the parent branch's committed tip; opts.BaseRef
-		// and the configured base_ref are ignored by design.
+		// In derive mode the base is the parent branch's committed tip; the
+		// configured base_ref is ignored by design.
 		baseRef = parentBranch
-		if err := m.git.VerifyRef(repoRoot, baseRef); err != nil {
-			return AddResult{}, fmt.Errorf("base ref %q not found: %w", baseRef, err)
-		}
-	case fromExisting:
-		if !m.git.BranchExists(repoRoot, branch) {
-			return AddResult{}, fmt.Errorf("branch %q does not exist locally", branch)
-		}
 	default:
 		if m.git.BranchExists(repoRoot, branch) {
-			return AddResult{}, fmt.Errorf("branch %q already exists; pass a different --branch", branch)
+			return AddResult{}, fmt.Errorf("branch %q already exists", branch)
 		}
-		baseRef = opts.BaseRef
-		if baseRef == "" {
-			baseRef = m.cfg.BaseRef()
-		}
-		if err := m.git.VerifyRef(repoRoot, baseRef); err != nil {
-			return AddResult{}, fmt.Errorf("base ref %q not found: %w", baseRef, err)
-		}
+		baseRef = m.cfg.BaseRef()
+	}
+	if err := m.git.VerifyRef(repoRoot, baseRef); err != nil {
+		return AddResult{}, fmt.Errorf("base ref %q not found: %w", baseRef, err)
 	}
 
 	container := m.containerPath(repoRoot)
@@ -260,43 +196,33 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	hc := HookContext{
 		SourceRoot: repoRoot,
 		TargetRoot: target,
-		Name:       name,
+		Name:       branch,
 		Branch:     branch,
 		BaseRef:    baseRef,
 		Container:  container,
 		RepoName:   filepath.Base(repoRoot),
 	}
 
-	if !opts.NoHooks {
-		pc := hc
-		pc.Event = PreCreate
-		pc.Cwd = repoRoot
-		if err := m.hooks.Run(pc); err != nil {
-			return AddResult{}, fmt.Errorf("pre-create hook failed (nothing created): %w", err)
-		}
+	pc := hc
+	pc.Event = PreCreate
+	pc.Cwd = repoRoot
+	if err := m.hooks.Run(pc); err != nil {
+		return AddResult{}, fmt.Errorf("pre-create hook failed (nothing created): %w", err)
 	}
 
-	if fromExisting {
-		if err := m.git.AddWorktreeExisting(repoRoot, target, branch); err != nil {
-			return AddResult{}, fmt.Errorf("git worktree add: %w", err)
-		}
-	} else {
-		if err := m.git.AddWorktree(repoRoot, target, branch, baseRef); err != nil {
-			return AddResult{}, fmt.Errorf("git worktree add: %w", err)
-		}
+	if err := m.git.AddWorktree(repoRoot, target, branch, baseRef); err != nil {
+		return AddResult{}, fmt.Errorf("git worktree add: %w", err)
 	}
 
-	if !opts.NoHooks {
-		poc := hc
-		poc.Event = PostCreate
-		poc.Cwd = target
-		if err := m.hooks.Run(poc); err != nil {
-			return AddResult{Name: name, Branch: branch, Path: target, BaseRef: baseRef},
-				fmt.Errorf("post-create hook failed (worktree left in place at %s): %w", target, err)
-		}
+	poc := hc
+	poc.Event = PostCreate
+	poc.Cwd = target
+	if err := m.hooks.Run(poc); err != nil {
+		return AddResult{Name: branch, Branch: branch, Path: target, BaseRef: baseRef},
+			fmt.Errorf("post-create hook failed (worktree left in place at %s): %w", target, err)
 	}
 
-	return AddResult{Name: name, Branch: branch, Path: target, BaseRef: baseRef}, nil
+	return AddResult{Name: branch, Branch: branch, Path: target, BaseRef: baseRef}, nil
 }
 
 // List returns the worktrees wt manages: the main working tree (flagged IsMain)
@@ -334,11 +260,10 @@ func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
 	return out, nil
 }
 
-// resolveWorktree maps a user-supplied name to a worktree. Since the worktree
-// directory now mirrors the full branch (nested, prefixed), a name matches when
-// it equals the branch (with or without prefix), the container-relative path,
-// or the leaf directory name. It refuses the main worktree and errors on
-// not-found.
+// resolveWorktree maps a user-supplied name to a worktree. A name matches
+// when it equals the branch, the container-relative directory (the sanitized
+// branch), or the leaf directory name. It refuses the main worktree and
+// errors on not-found.
 func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 	list, err := m.List(dir)
 	if err != nil {
@@ -349,16 +274,13 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 		return WorktreeInfo{}, err
 	}
 	container := m.containerPath(repoRoot)
-	prefix := m.cfg.BranchPrefix()
-	nameNoPrefix := strings.TrimPrefix(name, prefix)
-	wantBranch := "refs/heads/" + prefix + nameNoPrefix
 	leaf := filepath.Base(filepath.FromSlash(name))
 	for _, w := range list {
 		rel := relUnder(w.Path, container)
-		byBranch := w.Branch == wantBranch || w.Branch == "refs/heads/"+name
-		byPath := rel == name || rel == prefix+nameNoPrefix || rel == nameNoPrefix
+		byBranch := w.Branch == "refs/heads/"+name
+		byDir := rel == name || rel == naming.SanitizeSegment(name)
 		byLeaf := filepath.Base(w.Path) == leaf
-		if byBranch || byPath || byLeaf {
+		if byBranch || byDir || byLeaf {
 			if w.IsMain {
 				return WorktreeInfo{}, fmt.Errorf("%q is the main worktree and cannot be removed", name)
 			}
@@ -369,13 +291,47 @@ func (m *Manager) resolveWorktree(dir, name string) (WorktreeInfo, error) {
 }
 
 // pruneEmptyParents removes now-empty parent directories of a removed worktree,
-// walking up to (but not including) the container. The first non-empty parent
-// (os.Remove fails) stops the walk.
+// walking up to (but not including) the container. New worktree dirs are flat,
+// but worktrees created by older layouts may still be nested. The first
+// non-empty parent (os.Remove fails) stops the walk.
 func (m *Manager) pruneEmptyParents(container, worktreePath string) {
 	for parent := filepath.Dir(worktreePath); !pathsEqual(parent, container) &&
 		hasPathPrefix(parent, container); parent = filepath.Dir(parent) {
 		if err := os.Remove(parent); err != nil {
 			break
+		}
+	}
+}
+
+// EscapeCwd moves the process's working directory to the main repo root when
+// it currently sits inside a managed (non-main) worktree. On Windows a
+// directory that is any process's cwd cannot be deleted, so a wt process
+// standing inside a worktree would block its own rm/kill-em-all; on POSIX it
+// merely avoids finishing in a deleted directory. Best-effort: any failure
+// leaves the cwd unchanged.
+func (m *Manager) EscapeCwd(dir string) {
+	repoRoot, err := m.git.MainRoot(dir)
+	if err != nil {
+		return
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	if resolved, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = resolved
+	}
+	worktrees, err := m.git.ListWorktrees(dir)
+	if err != nil {
+		return
+	}
+	for _, w := range worktrees {
+		if pathsEqual(w.Path, repoRoot) {
+			continue
+		}
+		if hasPathPrefix(cwd, w.Path) {
+			_ = os.Chdir(repoRoot)
+			return
 		}
 	}
 }
@@ -416,6 +372,9 @@ func (m *Manager) Remove(dir string, opts RemoveOptions) (RemoveResult, error) {
 		}
 	}
 
+	// Leave the worktree before deleting it: the wt process's own cwd would
+	// otherwise block the removal on Windows.
+	m.EscapeCwd(dir)
 	if err := m.git.RemoveWorktree(repoRoot, w.Path, opts.Force); err != nil {
 		return res, fmt.Errorf("git worktree remove: %w", err)
 	}
@@ -448,68 +407,33 @@ func (m *Manager) Find(dir, name string) (WorktreeInfo, error) {
 	return m.resolveWorktree(dir, name)
 }
 
-// Templates returns the configured templates (for `wt templates` / the TUI).
-func (m *Manager) Templates() []Template { return m.cfg.Templates() }
-
-// ResolveTemplate finds a template by name or 1-based number and renders it with
-// vars. The rendered string is intended to be used as AddOptions.Name (the
-// prefix is applied by the normal Add flow). Unknown ref or a missing variable
-// is an error.
-func (m *Manager) ResolveTemplate(ref string, vars map[string]string) (string, error) {
-	tmpls := m.cfg.Templates()
-	tmpl := ""
-	found := false
-	if n, err := strconv.Atoi(ref); err == nil {
-		if n >= 1 && n <= len(tmpls) {
-			tmpl = tmpls[n-1].Template
-			found = true
-		}
-	} else {
-		for _, t := range tmpls {
-			if t.Name == ref {
-				tmpl = t.Template
-				found = true
-				break
-			}
-		}
-	}
-	if !found {
-		return "", fmt.Errorf("unknown template %q", ref)
-	}
-	return naming.RenderTemplate(tmpl, vars)
-}
-
 // PlanRemoveAll returns the read-only preview of a kill-em-all run: every
-// non-main worktree in the container and every branch matching the configured
-// prefix (including orphans with no worktree). It performs no mutation.
+// non-main worktree in the container and each one's branch. It performs no
+// mutation. Branches with no container worktree are not swept (there is no
+// branch prefix to identify them by anymore).
 func (m *Manager) PlanRemoveAll(dir string) (RemoveAllPlan, error) {
-	repoRoot, err := m.git.MainRoot(dir)
-	if err != nil {
-		return RemoveAllPlan{}, err
-	}
 	list, err := m.List(dir)
 	if err != nil {
 		return RemoveAllPlan{}, err
 	}
 	var plan RemoveAllPlan
 	for _, w := range list {
-		if !w.IsMain {
-			plan.Worktrees = append(plan.Worktrees, w)
+		if w.IsMain {
+			continue
+		}
+		plan.Worktrees = append(plan.Worktrees, w)
+		if b := strings.TrimPrefix(w.Branch, "refs/heads/"); b != "" {
+			plan.Branches = append(plan.Branches, b)
 		}
 	}
-	branches, err := m.git.ListBranches(repoRoot, m.cfg.BranchPrefix())
-	if err != nil {
-		return RemoveAllPlan{}, err
-	}
-	plan.Branches = branches
 	return plan, nil
 }
 
 // RemoveAll force-removes every non-main container worktree and force-deletes
-// every prefix-matching branch (orphans included), skipping lifecycle hooks. It
-// is best-effort: a failure on one item is recorded and execution continues. A
-// non-nil error is returned only for a fatal setup failure (e.g. planning). A
-// final `git worktree prune` clears stale admin entries.
+// their branches, skipping lifecycle hooks. It is best-effort: a failure on
+// one item is recorded and execution continues. A non-nil error is returned
+// only for a fatal setup failure (e.g. planning). A final `git worktree
+// prune` clears stale admin entries.
 func (m *Manager) RemoveAll(dir string) (RemoveAllResult, error) {
 	repoRoot, err := m.git.MainRoot(dir)
 	if err != nil {
@@ -519,6 +443,10 @@ func (m *Manager) RemoveAll(dir string) (RemoveAllResult, error) {
 	if err != nil {
 		return RemoveAllResult{}, err
 	}
+
+	// Leave whichever worktree the process stands in before deleting: the wt
+	// process's own cwd would otherwise block the removal on Windows.
+	m.EscapeCwd(dir)
 
 	var res RemoveAllResult
 	for _, w := range plan.Worktrees {

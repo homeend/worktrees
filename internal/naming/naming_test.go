@@ -1,93 +1,103 @@
 package naming
 
 import (
-	"math"
-	"regexp"
+	"math/rand/v2"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestGenerate_DateFirstFormat(t *testing.T) {
-	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
-	name := Generate(ts, 4821)
-	re := regexp.MustCompile(`^2026-05-31_14-30-[a-z]+-[a-z]+-4821$`)
-	if !re.MatchString(name) {
-		t.Errorf("name %q does not match expected pattern", name)
+func testCtx() Ctx {
+	return Ctx{
+		ParentBranch: "feature/login",
+		Repo:         "myrepo",
+		Seqs:         map[string]int{"wt": 4},
+		Now:          func() time.Time { return time.Date(2026, 7, 22, 21, 30, 5, 0, time.UTC) },
+		Rand:         rand.New(rand.NewPCG(1, 2)),
 	}
 }
 
-func TestGenerate_IsDeterministicForSeed(t *testing.T) {
-	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
-	a := Generate(ts, 1)
-	if a[:16] != "2026-05-31_14-30" {
-		t.Errorf("date prefix wrong: %q", a)
+func TestResolve_BuiltinTokens(t *testing.T) {
+	cases := []struct {
+		tmpl, want string
+	}{
+		{"fix/<repo>-x", "fix/myrepo-x"},
+		{"<parent-branch>-hotfix", "feature/login-hotfix"},
+		{"d-<date>", "d-2026-07-22"},
+		{"d-<date:yyyyMMdd-HHmm>", "d-20260722-2130"},
+		{"s-<seq:wt>", "s-4"},
+		{"s-<seq:wt:3>", "s-004"},
+		{"s-<seq:other>", "s-0"},
 	}
-	if a[len(a)-4:] != "0001" {
-		t.Errorf("digit suffix should be zero-padded: %q", a)
-	}
-}
-
-func TestGenerate_NonNegativeAndWellFormedForEdgeDigits(t *testing.T) {
-	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
-	re := regexp.MustCompile(`^2026-05-31_14-30-[a-z]+-[a-z]+-\d{4}$`)
-	for _, digits := range []int{0, 9999, 10000, 12345, -1, -9999, math.MinInt, math.MaxInt} {
-		name := Generate(ts, digits) // must not panic
-		if !re.MatchString(name) {
-			t.Errorf("Generate(%d) = %q, not a well-formed name", digits, name)
+	for _, c := range cases {
+		got, err := Resolve(c.tmpl, nil, testCtx())
+		if err != nil {
+			t.Errorf("Resolve(%q): %v", c.tmpl, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("Resolve(%q) = %q, want %q", c.tmpl, got, c.want)
 		}
 	}
 }
 
-func TestGenerateFrom_EmptyTemplateMatchesGenerate(t *testing.T) {
-	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
-	got, err := GenerateFrom("", ts, 4821)
+func TestResolve_UserInputs(t *testing.T) {
+	got, err := Resolve("fix/<user:ticket>-review", map[string]string{"ticket": "GH-42"}, testCtx())
 	if err != nil {
-		t.Fatalf("GenerateFrom: %v", err)
+		t.Fatalf("Resolve: %v", err)
 	}
-	if got != Generate(ts, 4821) {
-		t.Errorf("empty template = %q, want default %q", got, Generate(ts, 4821))
+	if got != "fix/GH-42-review" {
+		t.Errorf("got %q, want fix/GH-42-review", got)
+	}
+	if _, err := Resolve("fix/<user:ticket>", nil, testCtx()); err == nil {
+		t.Error("missing user input should error")
 	}
 }
 
-func TestGenerateFrom_RendersCustomTemplate(t *testing.T) {
-	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
-	got, err := GenerateFrom("{{.Adjective}}_{{.Noun}}_{{.Digits}}", ts, 4821)
+func TestResolve_RandomTokens(t *testing.T) {
+	got, err := Resolve("<random-alpha:4>-<random-num:3>", nil, testCtx())
 	if err != nil {
-		t.Fatalf("GenerateFrom: %v", err)
+		t.Fatalf("Resolve: %v", err)
 	}
-	if got != "eager_canyon_4821" {
-		t.Errorf("custom template = %q, want eager_canyon_4821", got)
-	}
-}
-
-func TestGenerateFrom_InvalidTemplateErrors(t *testing.T) {
-	ts := time.Date(2026, 5, 31, 14, 30, 0, 0, time.UTC)
-	if _, err := GenerateFrom("{{.Nope}}", ts, 1); err == nil {
-		t.Error("unknown field should error (missingkey=error)")
-	}
-	if _, err := GenerateFrom("{{.Adjective", ts, 1); err == nil {
-		t.Error("malformed template should error")
+	parts := strings.SplitN(got, "-", 2)
+	if len(parts[0]) != 4 || len(parts[1]) != 3 {
+		t.Errorf("lengths wrong in %q", got)
 	}
 }
 
-func TestRenderTemplate_Renders(t *testing.T) {
-	got, err := RenderTemplate("autofix/{{.ticketName}}", map[string]string{"ticketName": "ZX-12"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "autofix/ZX-12" {
-		t.Errorf("RenderTemplate = %q, want autofix/ZX-12", got)
+func TestResolve_Errors(t *testing.T) {
+	for _, tmpl := range []string{"<bogus>", "<seq>", "<user>", "<random-alpha>", "<seq:x:-1>"} {
+		if _, err := Resolve(tmpl, nil, testCtx()); err == nil {
+			t.Errorf("Resolve(%q) should error", tmpl)
+		}
 	}
 }
 
-func TestRenderTemplate_MissingVarErrors(t *testing.T) {
-	if _, err := RenderTemplate("{{.nope}}", map[string]string{}); err == nil {
-		t.Error("missing variable should error")
+func TestUserLabelsAndSeqNames(t *testing.T) {
+	tmpl := "f/<user:ticket>-<seq:wt:3>-<user:who>-<user:ticket>-<seq:other>"
+	if got := UserLabels(tmpl); len(got) != 2 || got[0] != "ticket" || got[1] != "who" {
+		t.Errorf("UserLabels = %v, want [ticket who]", got)
+	}
+	if got := SeqNames(tmpl); len(got) != 2 || got[0] != "wt" || got[1] != "other" {
+		t.Errorf("SeqNames = %v, want [wt other]", got)
 	}
 }
 
-func TestRenderTemplate_InvalidTemplateErrors(t *testing.T) {
-	if _, err := RenderTemplate("{{.x", nil); err == nil {
-		t.Error("malformed template should error")
+func TestSanitizeSegment(t *testing.T) {
+	cases := []struct {
+		in, want string
+		goos     string
+	}{
+		{"feature/login-v2", "feature-login-v2", "linux"},
+		{`a\b`, "a-b", "linux"},
+		{"x:y", "x-y", "windows"},
+		{"con", "con_", "windows"},
+		{"name. ", "name", "windows"},
+		{"", "tag", "linux"},
+	}
+	for _, c := range cases {
+		if got := SanitizeSegmentFor(c.in, c.goos); got != c.want {
+			t.Errorf("SanitizeSegmentFor(%q, %s) = %q, want %q", c.in, c.goos, got, c.want)
+		}
 	}
 }

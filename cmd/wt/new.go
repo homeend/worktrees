@@ -1,132 +1,170 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"math/rand/v2"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/homeend/worktrees/internal/config"
+	"github.com/homeend/worktrees/internal/git"
+	"github.com/homeend/worktrees/internal/naming"
 	"github.com/homeend/worktrees/pkg/worktree"
 )
 
-var (
-	newBranch       string
-	newBase         string
-	newNoHooks      bool
-	newTemplate     string
-	newFromBranch   string
-	newNoPrefix     bool
-	newBranchPrefix string
-)
+var newTemplate string
 
-// worktreeAddOptions builds AddOptions from flag values (extracted for testing).
-func worktreeAddOptions(name, branch, base string, noHooks bool) worktree.AddOptions {
-	return worktree.AddOptions{Name: name, Branch: branch, BaseRef: base, NoHooks: noHooks}
-}
-
-// addResolver renders a template ref into a branch name. *worktree.Manager
-// satisfies it; a fake is used in tests.
-type addResolver interface {
-	ResolveTemplate(ref string, vars map[string]string) (string, error)
-}
-
-// parseVars turns ["k:v", ...] into a map. The value may contain colons (split
-// on the first only). A missing colon or empty key is an error.
+// parseVars turns ["k=v", ...] into a map. The value may contain '=' (split
+// on the first only). A missing '=' or empty key is an error.
 func parseVars(args []string) (map[string]string, error) {
 	vars := make(map[string]string, len(args))
 	for _, a := range args {
-		k, v, ok := strings.Cut(a, ":")
+		k, v, ok := strings.Cut(a, "=")
 		if !ok || k == "" {
-			return nil, fmt.Errorf("invalid variable %q (expected name:value)", a)
+			return nil, fmt.Errorf("invalid variable %q (expected name=value)", a)
 		}
 		vars[k] = v
 	}
 	return vars, nil
 }
 
-// buildAddOptions resolves new's flags/args into AddOptions. --template,
-// --from-branch, and --branch are mutually exclusive (each defines the branch).
-func buildAddOptions(r addResolver, args []string, tmpl, fromBranch, branch, base string, noHooks, noPrefix bool, prefixOverride string) (worktree.AddOptions, error) {
-	set := 0
-	for _, s := range []string{tmpl, fromBranch, branch} {
-		if s != "" {
-			set++
+// promptMissing collects values for template <user:LABEL> tokens not already
+// present in vars. Interactive mode asks on out/in; otherwise a missing
+// label is an error naming the k=v syntax.
+func promptMissing(vars map[string]string, labels []string, in io.Reader, out io.Writer, interactive bool) error {
+	reader := bufio.NewReader(in)
+	for _, l := range labels {
+		if _, ok := vars[l]; ok {
+			continue
 		}
+		if !interactive {
+			return fmt.Errorf("missing value for <user:%s>: pass %s=<value> (no TTY to ask interactively)", l, l)
+		}
+		fmt.Fprintf(out, "%s: ", l)
+		line, err := reader.ReadString('\n')
+		if err != nil && line == "" {
+			return fmt.Errorf("read value for <user:%s>: %w", l, err)
+		}
+		v := strings.TrimSpace(line)
+		if v == "" {
+			return fmt.Errorf("empty value for <user:%s>", l)
+		}
+		vars[l] = v
 	}
-	if set > 1 {
-		return worktree.AddOptions{}, fmt.Errorf("--template, --from-branch, and --branch are mutually exclusive")
-	}
+	return nil
+}
 
-	opts := worktreeAddOptions("", branch, base, noHooks)
-	opts.NoPrefix = noPrefix
-	if !noPrefix {
-		opts.PrefixOverride = config.NormalizePrefix(prefixOverride)
+// lookupTemplate finds a named template, erroring with the available names.
+func lookupTemplate(cfg config.Config, name string) (string, error) {
+	if tmpl, ok := cfg.Templates[name]; ok {
+		return tmpl, nil
 	}
-	switch {
-	case fromBranch != "":
-		if len(args) > 0 {
-			return worktree.AddOptions{}, fmt.Errorf("--from-branch takes no positional arguments")
-		}
-		opts.FromBranch = fromBranch
-	case tmpl != "":
-		vars, err := parseVars(args)
-		if err != nil {
-			return worktree.AddOptions{}, err
-		}
-		name, err := r.ResolveTemplate(tmpl, vars)
-		if err != nil {
-			return worktree.AddOptions{}, err
-		}
-		opts.Name = name
-		// Signal that Name came from a template so derive mode (Add run from
-		// inside a worktree) does not reinterpret it as a literal suffix token.
-		opts.FromTemplate = true
-	default:
-		if len(args) > 1 {
-			return worktree.AddOptions{}, fmt.Errorf("expected at most one name argument, got %d", len(args))
-		}
-		if len(args) == 1 {
-			opts.Name = args[0]
-		}
+	names := make([]string, 0, len(cfg.Templates))
+	for n := range cfg.Templates {
+		names = append(names, n)
 	}
-	return opts, nil
+	sort.Strings(names)
+	if len(names) == 0 {
+		return "", fmt.Errorf("unknown template %q (none configured; add a [templates] table to .wt.toml or the user config)", name)
+	}
+	return "", fmt.Errorf("unknown template %q (available: %s)", name, strings.Join(names, ", "))
 }
 
 var newCmd = &cobra.Command{
-	Use:   "new [name | suffix | var:value ...]",
+	Use:   "new [name] [var=value ...]",
 	Short: "Create a new worktree (derives from the current worktree's branch when run inside one)",
-	Long: `Create a new worktree.
+	Long: `Create a new worktree. A branch name is never generated: pass a name, use a
+named template (-t), or run it from inside a worktree.
 
-Run from the main repo root, ` + "`wt new`" + ` branches off the configured base
-ref (base_ref / HEAD) exactly as before.
+From the main repo root:
 
-Run from inside a managed worktree, ` + "`wt new`" + ` instead derives the new branch
-from the current worktree's branch, cutting it from that branch's committed tip
-and placing the new worktree in the main repo's container:
+  wt new fix-login          # branch fix-login, cut from base_ref
+  wt new -t fix ticket=42   # branch from the "fix" template; missing
+                            # <user:...> values are asked interactively
 
-  wt new            # <current-branch>-vNNN (lowest free, zero-padded)
-  wt new -- -patch01  # <current-branch>-patch01 (literal suffix)
+From inside a managed worktree the new branch derives from that worktree's
+branch, cut from its committed tip:
 
-A custom suffix token that starts with a dash must be passed after ` + "`--`" + `
-(e.g. ` + "`wt new -- -patch01`" + `); otherwise cobra parses the leading-dash
-argument as a flag. The token is appended verbatim — its leading dash is the
-separator. If the resulting branch already exists, the command fails rather than
-auto-renaming. The parent branch's prefix is inherited as-is; --no-prefix /
---branch-prefix / --base have no effect in derive mode.`,
+  wt new                    # <current-branch>-vNNN (lowest free number)
+  wt new fix                # <current-branch>-fix (literal suffix)
+
+Templates use the gg token syntax: <user:LABEL>, <seq:NAME:PAD>,
+<date:yyyy-MM-dd>, <repo>, <parent-branch>, <random-alpha:N>, <random-num:N>.
+Worktree directories are the branch sanitized into one flat segment
+('/' becomes '-') inside the sibling <repo>.worktrees container.`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m, cwd, err := managerForWorkdir()
+		m, cfg, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}
-		opts, err := buildAddOptions(m, args, newTemplate, newFromBranch, newBranch, newBase, newNoHooks, newNoPrefix, newBranchPrefix)
-		if err != nil {
-			return err
+
+		var opts worktree.AddOptions
+		var bumpSeqs []string
+		var commonDir string
+
+		if newTemplate == "" {
+			if len(args) > 1 {
+				return fmt.Errorf("expected at most one name argument, got %d", len(args))
+			}
+			if len(args) == 1 {
+				opts.Name = args[0]
+			}
+		} else {
+			tmpl, err := lookupTemplate(cfg, newTemplate)
+			if err != nil {
+				return err
+			}
+			vars, err := parseVars(args)
+			if err != nil {
+				return err
+			}
+			interactive := term.IsTerminal(int(os.Stdin.Fd()))
+			if err := promptMissing(vars, naming.UserLabels(tmpl), os.Stdin, os.Stdout, interactive); err != nil {
+				return err
+			}
+
+			repoRoot, err := repoRootFor(cwd)
+			if err != nil {
+				return err
+			}
+			commonDir, err = git.New().CommonDir(cwd)
+			if err != nil {
+				return err
+			}
+			bumpSeqs = naming.SeqNames(tmpl)
+			parent, _ := m.ParentBranch(cwd)
+			branch, err := naming.Resolve(tmpl, vars, naming.Ctx{
+				Repo:         filepath.Base(repoRoot),
+				ParentBranch: parent,
+				Seqs:         config.PeekSeqs(commonDir, bumpSeqs),
+				Now:          time.Now,
+				Rand:         rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+			})
+			if err != nil {
+				return err
+			}
+			opts.Branch = branch
 		}
+
 		res, err := m.Add(cwd, opts)
 		if err != nil {
 			return err
+		}
+		// Consume the <seq:> counters only after a successful create, so a
+		// failed attempt does not burn numbers.
+		for _, name := range bumpSeqs {
+			if _, err := config.BumpSeq(commonDir, name); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: bump seq %q: %v\n", name, err)
+			}
 		}
 		fmt.Printf("Created worktree %q\n  branch: %s\n  path:   %s\n", res.Name, res.Branch, res.Path)
 		return nil
@@ -134,12 +172,6 @@ auto-renaming. The parent branch's prefix is inherited as-is; --no-prefix /
 }
 
 func init() {
-	newCmd.Flags().StringVarP(&newBranch, "branch", "b", "", "branch name (default: derived from name)")
-	newCmd.Flags().StringVar(&newBase, "base", "", "base ref to branch from (default: config base_ref / HEAD)")
-	newCmd.Flags().BoolVar(&newNoHooks, "no-hooks", false, "skip lifecycle hooks")
-	newCmd.Flags().StringVarP(&newTemplate, "template", "t", "", "render the branch from a named/numbered template")
-	newCmd.Flags().StringVar(&newFromBranch, "from-branch", "", "create a worktree from an existing local branch")
-	newCmd.Flags().BoolVar(&newNoPrefix, "no-prefix", false, "do not prepend the configured branch prefix")
-	newCmd.Flags().StringVar(&newBranchPrefix, "branch-prefix", "", "override the branch prefix for this run (empty disables; --no-prefix wins)")
+	newCmd.Flags().StringVarP(&newTemplate, "template", "t", "", "render the branch from a named template")
 	rootCmd.AddCommand(newCmd)
 }

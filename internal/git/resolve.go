@@ -14,15 +14,24 @@ func (r *Runner) TopLevel(dir string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// MainRoot returns the MAIN working tree root, even when dir is inside a linked
-// worktree. It derives the path from --git-common-dir and returns that
-// directory's parent.
-func (r *Runner) MainRoot(dir string) (string, error) {
+// CommonDir returns the absolute git common directory (shared by all linked
+// worktrees of a repo). Machine-local state like <seq> counters lives there.
+func (r *Runner) CommonDir(dir string) (string, error) {
 	out, err := r.Run(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return "", err
 	}
-	commonDir := strings.TrimSpace(string(out))
+	return filepath.Clean(strings.TrimSpace(string(out))), nil
+}
+
+// MainRoot returns the MAIN working tree root, even when dir is inside a linked
+// worktree. It derives the path from --git-common-dir and returns that
+// directory's parent.
+func (r *Runner) MainRoot(dir string) (string, error) {
+	commonDir, err := r.CommonDir(dir)
+	if err != nil {
+		return "", err
+	}
 	return filepath.Dir(commonDir), nil
 }
 

@@ -21,6 +21,20 @@ func emitSelection(sel string) error {
 	return writeCdFile(cdFileFlag, sel)
 }
 
+// escapeDeadCwd transports the user's shell to the repo root when the
+// directory the command started in no longer exists (it was removed by this
+// very command, e.g. rm/kill-em-all run from inside a worktree). Without the
+// shell wrapper this just prints the root path.
+func escapeDeadCwd(cwd, repoRoot string, rootErr error) error {
+	if rootErr != nil {
+		return nil
+	}
+	if _, err := os.Stat(cwd); err == nil {
+		return nil
+	}
+	return emitSelection(repoRoot)
+}
+
 // writeCdFile writes dir into file for the shell wrapper to consume; an empty
 // file name is a no-op.
 func writeCdFile(file, dir string) error {

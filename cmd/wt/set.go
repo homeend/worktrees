@@ -10,19 +10,25 @@ import (
 
 var setSafe bool
 
-// runSet applies a config write with optional --safe protection. Extracted from
-// the cobra command for testing. With safe=true it refuses to overwrite an
-// existing, different value (an equal value is a no-op success).
+// runSet applies a config write to the repo's .wt.toml with optional --safe
+// protection. Extracted from the cobra command for testing. With safe=true it
+// refuses to overwrite an existing, different value (an equal value is a
+// no-op success).
 func runSet(repoRoot, key, value string, safe bool) error {
-	if safe && key == "branch_prefix" {
-		fileCfg, err := config.LoadFile(repoRoot)
+	if safe {
+		fileCfg, err := config.LoadRepoFile(repoRoot)
 		if err != nil {
 			return err
 		}
-		existing := config.NormalizePrefix(fileCfg.BranchPrefix)
-		want := config.NormalizePrefix(value)
-		if existing != "" && existing != want {
-			return fmt.Errorf("branch_prefix already set to %q; refusing to overwrite with %q (--safe)", existing, want)
+		existing := ""
+		switch key {
+		case "base_ref":
+			existing = fileCfg.BaseRef
+		case "container":
+			existing = fileCfg.Container
+		}
+		if existing != "" && existing != value {
+			return fmt.Errorf("%s already set to %q; refusing to overwrite with %q (--safe)", key, existing, value)
 		}
 	}
 	return config.Set(repoRoot, key, value)
@@ -30,7 +36,7 @@ func runSet(repoRoot, key, value string, safe bool) error {
 
 var setCmd = &cobra.Command{
 	Use:   "set <key> <value>",
-	Short: "Set a configuration value (e.g. branch_prefix)",
+	Short: "Set a configuration value in .wt.toml (base_ref, container)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cwd, err := workdir()
@@ -45,7 +51,7 @@ var setCmd = &cobra.Command{
 		if err := runSet(repoRoot, key, value, setSafe); err != nil {
 			return err
 		}
-		fmt.Printf("Set %s = %q\n", key, config.NormalizePrefix(value))
+		fmt.Printf("Set %s = %q\n", key, value)
 		return nil
 	},
 }

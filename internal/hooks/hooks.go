@@ -11,7 +11,7 @@ import (
 	"github.com/homeend/worktrees/pkg/worktree"
 )
 
-// Runner runs convention-dir hooks from <repoRoot>/.worktrees/.
+// Runner runs convention-dir hooks from <repoRoot>/.wt/.
 type Runner struct {
 	repoRoot string
 }
@@ -23,7 +23,7 @@ func New(repoRoot string) *Runner { return &Runner{repoRoot: repoRoot} }
 // or non-executable hook is a silent no-op. A non-zero exit is returned as an
 // error. Hook stdout/stderr stream to the process's stdout/stderr.
 func (r *Runner) Run(ctx worktree.HookContext) error {
-	path := filepath.Join(r.repoRoot, ".worktrees", string(ctx.Event))
+	path := filepath.Join(r.repoRoot, ".wt", string(ctx.Event))
 	info, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil

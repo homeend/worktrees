@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/homeend/worktrees/internal/naming"
 	"github.com/homeend/worktrees/pkg/worktree"
 )
 
@@ -21,8 +22,9 @@ const (
 	modeNormal mode = iota
 	modeConfirmDelete
 	modeConfirmKillAll
-	modeInputBranch
+	modeInputName
 	modeTemplates
+	modeInputVar
 )
 
 // lister is the subset of *worktree.Manager the TUI needs to refresh its view.
@@ -59,14 +61,27 @@ type model struct {
 	// process cannot change its parent shell's cwd itself).
 	selected string
 
+	// Template-creation flow state: the picked template, its <user:> labels,
+	// and the values collected so far (one modeInputVar round per label).
+	pendingTmpl worktree.Template
+	varLabels   []string
+	varVals     []string
+
 	// runAction launches a `wt` subcommand in the foreground, handing the
 	// terminal over so hook output renders cleanly, then reports completion.
 	// Injectable so tests can assert the command without spawning a process.
 	runAction func(args ...string) tea.Cmd
+
+	// escapeCwd moves the TUI process out of the worktree it may be standing
+	// in, called before destructive actions: on Windows a directory that is
+	// any process's cwd cannot be deleted, and the TUI itself would otherwise
+	// block the removal its subprocess performs. Injectable for tests.
+	escapeCwd func()
 }
 
 func newModel(store lister, dir string, items []worktree.WorktreeInfo, templates []worktree.Template) model {
-	return model{store: store, dir: dir, items: items, templates: templates, runAction: defaultRunAction}
+	return model{store: store, dir: dir, items: items, templates: templates,
+		runAction: defaultRunAction, escapeCwd: func() {}}
 }
 
 // loggedExec adapts an *exec.Cmd to tea.ExecCommand. The Bubble Tea runtime
@@ -190,10 +205,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfirm(msg)
 		case modeConfirmKillAll:
 			return m.updateConfirmKillAll(msg)
-		case modeInputBranch:
-			return m.updateInputBranch(msg)
+		case modeInputName:
+			return m.updateInputName(msg)
 		case modeTemplates:
 			return m.updateTemplates(msg)
+		case modeInputVar:
+			return m.updateInputVar(msg)
 		}
 		return m.updateNormal(msg)
 	}
@@ -231,9 +248,10 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor--
 		}
 	case "n":
-		// Create a worktree with an auto-generated name.
-		m.status = "creating worktree…"
-		return m, m.runAction("new", "--repo", m.dir)
+		// Names are never generated: ask for one.
+		m.mode = modeInputName
+		m.input = ""
+		m.status = ""
 	case "d":
 		it, ok := m.current()
 		if !ok {
@@ -248,10 +266,6 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "K":
 		m.mode = modeConfirmKillAll
 		m.status = ""
-	case "b":
-		m.mode = modeInputBranch
-		m.input = ""
-		m.status = ""
 	case "t":
 		m.mode = modeTemplates
 		m.status = ""
@@ -259,17 +273,17 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) updateInputBranch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m model) updateInputName(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
-		branch := strings.TrimSpace(m.input)
+		name := strings.TrimSpace(m.input)
 		m.mode = modeNormal
 		m.input = ""
-		if branch == "" {
+		if name == "" {
 			return m, nil
 		}
-		m.status = "creating from " + branch + "…"
-		return m, m.runAction("new", "--from-branch", branch, "--repo", m.dir)
+		m.status = "creating " + name + "…"
+		return m, m.runAction("new", name, "--repo", m.dir)
 	case tea.KeyEsc:
 		m.mode = modeNormal
 		m.input = ""
@@ -288,12 +302,78 @@ func (m model) updateInputBranch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateTemplates handles the template picker: a digit key creates from that
+// template (prompting for its <user:> values first), any other key returns.
 func (m model) updateTemplates(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "ctrl+c" {
+	s := msg.String()
+	if s == "ctrl+c" {
 		return m, tea.Quit
+	}
+	if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+		idx := int(s[0] - '1')
+		if idx < len(m.templates) {
+			m.pendingTmpl = m.templates[idx]
+			m.varLabels = naming.UserLabels(m.pendingTmpl.Template)
+			m.varVals = nil
+			if len(m.varLabels) == 0 {
+				return m.dispatchTemplate()
+			}
+			m.mode = modeInputVar
+			m.input = ""
+			m.status = ""
+			return m, nil
+		}
 	}
 	m.mode = modeNormal
 	return m, nil
+}
+
+// updateInputVar collects one <user:LABEL> value per round; after the last
+// label the create action is dispatched.
+func (m model) updateInputVar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		v := strings.TrimSpace(m.input)
+		if v == "" {
+			m.status = "value required (Esc cancels)"
+			return m, nil
+		}
+		m.varVals = append(m.varVals, v)
+		m.input = ""
+		if len(m.varVals) < len(m.varLabels) {
+			return m, nil
+		}
+		return m.dispatchTemplate()
+	case tea.KeyEsc:
+		m.mode = modeNormal
+		m.input = ""
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.input) > 0 {
+			m.input = m.input[:len(m.input)-1]
+		}
+		return m, nil
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyRunes:
+		m.input += string(msg.Runes)
+		return m, nil
+	}
+	return m, nil
+}
+
+// dispatchTemplate runs `wt new -t <name> label=value... --repo dir` with the
+// collected variable values.
+func (m model) dispatchTemplate() (tea.Model, tea.Cmd) {
+	args := []string{"new", "-t", m.pendingTmpl.Name}
+	for i, l := range m.varLabels {
+		args = append(args, l+"="+m.varVals[i])
+	}
+	args = append(args, "--repo", m.dir)
+	m.mode = modeNormal
+	m.input = ""
+	m.status = "creating from template " + m.pendingTmpl.Name + "…"
+	return m, m.runAction(args...)
 }
 
 func (m model) updateConfirmKillAll(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -301,6 +381,7 @@ func (m model) updateConfirmKillAll(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y", "Y":
 		m.mode = modeNormal
 		m.status = "removing all worktrees…"
+		m.escapeCwd()
 		return m, m.runAction("kill-em-all", "--yes", "--repo", m.dir)
 	case "n", "N", "esc":
 		m.mode = modeNormal
@@ -319,6 +400,7 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		name := filepath.Base(it.Path)
 		m.status = "removing " + name + "…"
+		m.escapeCwd()
 		return m, m.runAction("rm", name, "--repo", m.dir)
 	case "f", "F":
 		// Force: discard uncommitted changes and force-delete the branch even
@@ -330,6 +412,7 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		name := filepath.Base(it.Path)
 		m.status = "force-removing " + name + "…"
+		m.escapeCwd()
 		return m, m.runAction("rm", name, "--force", "--force-branch", "--repo", m.dir)
 	case "n", "N", "esc":
 		m.mode = modeNormal

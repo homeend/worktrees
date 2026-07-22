@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	cryptorand "crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -56,13 +56,23 @@ func init() {
 		if !shouldLaunchTUI(isTTY) {
 			return cmd.Help()
 		}
-		m, cwd, err := managerForWorkdir()
+		m, cfg, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}
-		sel, err := tui.Run(m, cwd)
+		// Resolved up front: cwd may no longer exist after a kill-em-all/rm
+		// performed from inside a worktree.
+		repoRoot, rootErr := repoRootFor(cwd)
+		sel, err := tui.Run(m, cwd, templateSlice(cfg))
 		if err != nil {
 			return err
+		}
+		if sel == "" && rootErr == nil {
+			if _, statErr := os.Stat(cwd); statErr != nil {
+				// The directory the TUI was started in was removed: transport
+				// the shell to the repo root instead of a dead directory.
+				sel = repoRoot
+			}
 		}
 		return emitSelection(sel)
 	}
@@ -72,25 +82,47 @@ func init() {
 func shouldLaunchTUI(isTTY bool) bool { return isTTY }
 
 // workdir returns the directory wt should operate from: the --repo flag if set,
-// otherwise the current working directory.
+// otherwise the current working directory. The result is absolute, so it stays
+// valid after the process escapes a worktree cwd (EscapeCwd) mid-operation.
 func workdir() (string, error) {
-	if repoFlag != "" {
-		return repoFlag, nil
+	dir := repoFlag
+	if dir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		dir = cwd
 	}
-	return os.Getwd()
+	return filepath.Abs(dir)
 }
 
-// managerForWorkdir resolves the workdir and builds a Manager for it.
-func managerForWorkdir() (*worktree.Manager, string, error) {
+// managerForWorkdir resolves the workdir and builds a Manager plus the
+// resolved config for it.
+func managerForWorkdir() (*worktree.Manager, config.Config, string, error) {
 	cwd, err := workdir()
 	if err != nil {
-		return nil, "", err
+		return nil, config.Config{}, "", err
 	}
-	m, err := buildManager(cwd)
+	m, cfg, err := buildManager(cwd)
 	if err != nil {
-		return nil, "", err
+		return nil, config.Config{}, "", err
 	}
-	return m, cwd, nil
+	return m, cfg, cwd, nil
+}
+
+// templateSlice returns the configured named templates sorted by name (for
+// stable CLI/TUI listings).
+func templateSlice(cfg config.Config) []worktree.Template {
+	names := make([]string, 0, len(cfg.Templates))
+	for n := range cfg.Templates {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	out := make([]worktree.Template, len(names))
+	for i, n := range names {
+		out[i] = worktree.Template{Name: n, Template: cfg.Templates[n]}
+	}
+	return out
 }
 
 // Execute runs the root command and returns a process exit code.
@@ -111,13 +143,13 @@ func (a gitAdapter) VerifyRef(d, ref string) error          { return a.r.VerifyR
 func (a gitAdapter) CheckRefFormat(b string) error          { return a.r.CheckRefFormat(b) }
 func (a gitAdapter) BranchExists(d, b string) bool          { return a.r.BranchExists(d, b) }
 func (a gitAdapter) AddWorktree(d, p, b, base string) error { return a.r.AddWorktree(d, p, b, base) }
-func (a gitAdapter) AddWorktreeExisting(d, p, b string) error {
-	return a.r.AddWorktreeExisting(d, p, b)
+func (a gitAdapter) RemoveWorktree(d, p string, f bool) error {
+	return a.r.RemoveWorktree(d, p, f)
 }
-func (a gitAdapter) RemoveWorktree(d, p string, f bool) error       { return a.r.RemoveWorktree(d, p, f) }
-func (a gitAdapter) DeleteBranch(d, b string, f bool) (bool, error) { return a.r.DeleteBranch(d, b, f) }
-func (a gitAdapter) ListBranches(d, p string) ([]string, error)     { return a.r.ListBranches(d, p) }
-func (a gitAdapter) Prune(d string) error                           { return a.r.Prune(d) }
+func (a gitAdapter) DeleteBranch(d, b string, f bool) (bool, error) {
+	return a.r.DeleteBranch(d, b, f)
+}
+func (a gitAdapter) Prune(d string) error { return a.r.Prune(d) }
 func (a gitAdapter) ListWorktrees(d string) ([]worktree.GitWorktree, error) {
 	ws, err := a.r.ListWorktrees(d)
 	if err != nil {
@@ -133,17 +165,8 @@ func (a gitAdapter) ListWorktrees(d string) ([]worktree.GitWorktree, error) {
 // cfgAdapter adapts config.Config to worktree.ConfigProvider.
 type cfgAdapter struct{ c config.Config }
 
-func (a cfgAdapter) BaseRef() string      { return a.c.BaseRef }
-func (a cfgAdapter) Container() string    { return a.c.Container }
-func (a cfgAdapter) NameTemplate() string { return a.c.NameTemplate }
-func (a cfgAdapter) BranchPrefix() string { return a.c.BranchPrefix }
-func (a cfgAdapter) Templates() []worktree.Template {
-	out := make([]worktree.Template, len(a.c.Templates))
-	for i, t := range a.c.Templates {
-		out[i] = worktree.Template{Name: t.Name, Template: t.Template}
-	}
-	return out
-}
+func (a cfgAdapter) BaseRef() string   { return a.c.BaseRef }
+func (a cfgAdapter) Container() string { return a.c.Container }
 
 // repoRootFor resolves the main repo root for cwd, after checking the git
 // version. Shared by commands that need the repo root without a full Manager.
@@ -160,25 +183,16 @@ func repoRootFor(cwd string) (string, error) {
 }
 
 // buildManager resolves the repo root and wires a Manager. cwd is where wt runs.
-func buildManager(cwd string) (*worktree.Manager, error) {
+func buildManager(cwd string) (*worktree.Manager, config.Config, error) {
 	r := git.New()
 	repoRoot, err := repoRootFor(cwd)
 	if err != nil {
-		return nil, err
+		return nil, config.Config{}, err
 	}
 	cfg, err := config.Load(repoRoot)
 	if err != nil {
-		return nil, err
+		return nil, config.Config{}, err
 	}
 	m := worktree.New(gitAdapter{r}, hooks.New(repoRoot), cfgAdapter{cfg})
-	m.SetDigits(randomDigits)
-	return m, nil
-}
-
-func randomDigits() int {
-	var b [2]byte
-	if _, err := cryptorand.Read(b[:]); err != nil {
-		return 1
-	}
-	return int(binary.BigEndian.Uint16(b[:]) % 10000)
+	return m, cfg, nil
 }

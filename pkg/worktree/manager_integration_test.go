@@ -19,15 +19,13 @@ func (a gitAdapter) VerifyRef(d, ref string) error          { return a.r.VerifyR
 func (a gitAdapter) CheckRefFormat(b string) error          { return a.r.CheckRefFormat(b) }
 func (a gitAdapter) BranchExists(d, b string) bool          { return a.r.BranchExists(d, b) }
 func (a gitAdapter) AddWorktree(d, p, b, base string) error { return a.r.AddWorktree(d, p, b, base) }
-func (a gitAdapter) AddWorktreeExisting(d, p, b string) error {
-	return a.r.AddWorktreeExisting(d, p, b)
+func (a gitAdapter) RemoveWorktree(d, p string, f bool) error {
+	return a.r.RemoveWorktree(d, p, f)
 }
-func (a gitAdapter) RemoveWorktree(d, p string, f bool) error { return a.r.RemoveWorktree(d, p, f) }
 func (a gitAdapter) DeleteBranch(d, b string, f bool) (bool, error) {
 	return a.r.DeleteBranch(d, b, f)
 }
-func (a gitAdapter) Prune(d string) error                       { return a.r.Prune(d) }
-func (a gitAdapter) ListBranches(d, p string) ([]string, error) { return a.r.ListBranches(d, p) }
+func (a gitAdapter) Prune(d string) error { return a.r.Prune(d) }
 func (a gitAdapter) ListWorktrees(d string) ([]GitWorktree, error) {
 	ws, err := a.r.ListWorktrees(d)
 	if err != nil {
@@ -46,11 +44,8 @@ func (noopHooks) Run(HookContext) error { return nil }
 
 type staticCfg struct{}
 
-func (staticCfg) BaseRef() string       { return "HEAD" }
-func (staticCfg) Container() string     { return "" }
-func (staticCfg) NameTemplate() string  { return "" }
-func (staticCfg) BranchPrefix() string  { return "wt/" }
-func (staticCfg) Templates() []Template { return nil }
+func (staticCfg) BaseRef() string   { return "HEAD" }
+func (staticCfg) Container() string { return "" }
 
 func newRealRepo(t *testing.T) string {
 	t.Helper()
@@ -85,143 +80,139 @@ func gitOut(t *testing.T, dir string, a ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// TestManager_DeriveFromWorktree_RealGit exercises all five ROADMAP Phase 1
-// success criteria end-to-end against real git: an initial managed worktree is
-// created from the repo root, then Add is invoked from INSIDE that worktree.
+// TestManager_DeriveFromWorktree_Integration_RealGit exercises derive mode
+// end-to-end against real git: an initial worktree is created from the repo
+// root, then Add is invoked from INSIDE that worktree.
 func TestManager_DeriveFromWorktree_Integration_RealGit(t *testing.T) {
 	repo := newRealRepo(t)
 	m := New(gitAdapter{git.New()}, noopHooks{}, staticCfg{})
 	container := repo + ".worktrees"
 
-	// Seed: a managed worktree on branch wt/feature-login, with a commit of its
+	// Seed: a managed worktree on branch feature-login, with a commit of its
 	// own so the parent tip differs from main.
-	parent, err := m.Add(repo, AddOptions{Name: "feature-login", NoHooks: true})
+	parent, err := m.Add(repo, AddOptions{Name: "feature-login"})
 	if err != nil {
 		t.Fatalf("seed Add: %v", err)
 	}
-	if parent.Branch != "wt/feature-login" {
-		t.Fatalf("seed branch = %q, want wt/feature-login", parent.Branch)
+	if parent.Branch != "feature-login" {
+		t.Fatalf("seed branch = %q, want feature-login (no prefix)", parent.Branch)
 	}
 	wtDir := parent.Path
 	os.WriteFile(filepath.Join(wtDir, "g"), []byte("y"), 0o644)
 	gitOut(t, wtDir, "add", ".")
 	gitOut(t, wtDir, "commit", "-m", "work")
-	parentTip := gitOut(t, wtDir, "rev-parse", "wt/feature-login")
+	parentTip := gitOut(t, wtDir, "rev-parse", "feature-login")
 
-	// (1) empty token from inside the worktree → <branch>-v001, cut from the
-	//     parent branch's committed tip, placed under the main container.
-	v1, err := m.Add(wtDir, AddOptions{NoHooks: true})
+	// (1) bare Add from inside the worktree → <branch>-v001, cut from the
+	//     parent branch's committed tip, placed flat under the main container.
+	v1, err := m.Add(wtDir, AddOptions{})
 	if err != nil {
 		t.Fatalf("derive v001 Add: %v", err)
 	}
-	if v1.Branch != "wt/feature-login-v001" {
-		t.Errorf("derive branch = %q, want wt/feature-login-v001", v1.Branch)
+	if v1.Branch != "feature-login-v001" {
+		t.Errorf("derive branch = %q, want feature-login-v001", v1.Branch)
 	}
-	wantV1Path := filepath.Join(container, "wt", "feature-login-v001")
+	wantV1Path := filepath.Join(container, "feature-login-v001")
 	if v1.Path != wantV1Path {
 		t.Errorf("derive path = %q, want %q", v1.Path, wantV1Path)
 	}
 	if _, err := os.Stat(wantV1Path); err != nil {
 		t.Errorf("derived worktree dir not created: %v", err)
 	}
-	// DERIVE-01: the new branch's start commit equals the parent branch tip.
-	v1Tip := gitOut(t, repo, "rev-parse", "wt/feature-login-v001")
+	v1Tip := gitOut(t, repo, "rev-parse", "feature-login-v001")
 	if v1Tip != parentTip {
 		t.Errorf("derived branch tip = %s, want parent tip %s", v1Tip, parentTip)
 	}
 
-	// (2) repeated Add picks the lowest free -vNNN, skipping existing and filling
-	//     a manually-created gap. v001 exists; create v003 by hand → next is v002,
-	//     then the following Add is v004.
-	gitOut(t, repo, "branch", "wt/feature-login-v003")
-	v2, err := m.Add(wtDir, AddOptions{NoHooks: true})
+	// (2) repeated Add picks the lowest free -vNNN, skipping existing and
+	//     filling a manually-created gap.
+	gitOut(t, repo, "branch", "feature-login-v003")
+	v2, err := m.Add(wtDir, AddOptions{})
 	if err != nil {
 		t.Fatalf("derive gap Add: %v", err)
 	}
-	if v2.Branch != "wt/feature-login-v002" {
-		t.Errorf("gap-fill branch = %q, want wt/feature-login-v002", v2.Branch)
+	if v2.Branch != "feature-login-v002" {
+		t.Errorf("gap-fill branch = %q, want feature-login-v002", v2.Branch)
 	}
-	v3, err := m.Add(wtDir, AddOptions{NoHooks: true})
+	v3, err := m.Add(wtDir, AddOptions{})
 	if err != nil {
 		t.Fatalf("derive after-gap Add: %v", err)
 	}
-	if v3.Branch != "wt/feature-login-v004" {
-		t.Errorf("after-gap branch = %q, want wt/feature-login-v004 (skips v001..v003)", v3.Branch)
+	if v3.Branch != "feature-login-v004" {
+		t.Errorf("after-gap branch = %q, want feature-login-v004 (skips v001..v003)", v3.Branch)
 	}
 
-	// (3) custom token → <branch>-patch01; a second Add with the same token is a
+	// (3) custom name → <branch>-patch01; a second Add with the same name is a
 	//     hard error and creates no second worktree.
-	c1, err := m.Add(wtDir, AddOptions{Name: "-patch01", NoHooks: true})
+	c1, err := m.Add(wtDir, AddOptions{Name: "-patch01"})
 	if err != nil {
-		t.Fatalf("derive custom token Add: %v", err)
+		t.Fatalf("derive custom name Add: %v", err)
 	}
-	if c1.Branch != "wt/feature-login-patch01" {
-		t.Errorf("custom branch = %q, want wt/feature-login-patch01", c1.Branch)
+	if c1.Branch != "feature-login-patch01" {
+		t.Errorf("custom branch = %q, want feature-login-patch01", c1.Branch)
 	}
 	beforeList, _ := m.List(repo)
-	if _, err := m.Add(wtDir, AddOptions{Name: "-patch01", NoHooks: true}); err == nil {
-		t.Error("second custom-token Add should fail with a collision error")
+	if _, err := m.Add(wtDir, AddOptions{Name: "-patch01"}); err == nil {
+		t.Error("second custom-name Add should fail with a collision error")
 	}
 	afterList, _ := m.List(repo)
 	if len(afterList) != len(beforeList) {
 		t.Errorf("collision should not create a worktree: before=%d after=%d", len(beforeList), len(afterList))
 	}
 
-	// (4) --no-prefix / PrefixOverride in derive mode leave the inherited prefix
-	//     intact (branch still carries wt/feature-login).
-	p4, err := m.Add(wtDir, AddOptions{NoPrefix: true, PrefixOverride: "x/", BaseRef: "main", NoHooks: true})
+	// (4) a rendered Branch wins over derive mode and branches off base_ref.
+	mainTip := gitOut(t, repo, "rev-parse", "main")
+	rb, err := m.Add(wtDir, AddOptions{Branch: "fix/GH-1"})
 	if err != nil {
-		t.Fatalf("derive prefix-override Add: %v", err)
+		t.Fatalf("rendered-branch Add: %v", err)
 	}
-	if !strings.HasPrefix(p4.Branch, "wt/feature-login-v") {
-		t.Errorf("derive branch = %q, want inherited wt/feature-login prefix verbatim", p4.Branch)
+	if rb.Branch != "fix/GH-1" {
+		t.Errorf("rendered branch = %q, want fix/GH-1", rb.Branch)
 	}
-	p4Tip := gitOut(t, repo, "rev-parse", p4.Branch)
-	if p4Tip != parentTip {
-		t.Errorf("derive base ignored override: tip = %s, want parent tip %s", p4Tip, parentTip)
+	if got := filepath.Base(rb.Path); got != "fix-GH-1" {
+		t.Errorf("rendered branch dir = %q, want fix-GH-1 (flat sanitized)", got)
+	}
+	rbTip := gitOut(t, repo, "rev-parse", "fix/GH-1")
+	if rbTip != mainTip {
+		t.Errorf("rendered branch tip = %s, want HEAD %s (config base, not parent)", rbTip, mainTip)
 	}
 
-	// (5) Add from the main repo root is unchanged: branches off base_ref/HEAD,
-	//     no -vNNN suffix, placed under the container by name.
-	mainTip := gitOut(t, repo, "rev-parse", "HEAD")
-	root, err := m.Add(repo, AddOptions{Name: "from-root", NoHooks: true})
+	// (5) Add from the main repo root: branch = name verbatim, no -vNNN.
+	root, err := m.Add(repo, AddOptions{Name: "from-root"})
 	if err != nil {
 		t.Fatalf("root Add: %v", err)
 	}
-	if root.Branch != "wt/from-root" {
-		t.Errorf("root branch = %q, want wt/from-root (no derive)", root.Branch)
+	if root.Branch != "from-root" {
+		t.Errorf("root branch = %q, want from-root (no derive)", root.Branch)
 	}
-	if strings.Contains(root.Branch, "-v0") {
-		t.Errorf("root branch should carry no -vNNN suffix: %q", root.Branch)
-	}
-	rootTip := gitOut(t, repo, "rev-parse", "wt/from-root")
+	rootTip := gitOut(t, repo, "rev-parse", "from-root")
 	if rootTip != mainTip {
 		t.Errorf("root branch tip = %s, want HEAD %s (not the worktree branch)", rootTip, mainTip)
 	}
 }
 
-func TestManager_NestedLayoutAndPrune_RealGit(t *testing.T) {
+func TestManager_FlatLayout_RealGit(t *testing.T) {
 	repo := newRealRepo(t)
 	m := New(gitAdapter{git.New()}, noopHooks{}, staticCfg{})
 
-	res, err := m.Add(repo, AddOptions{Name: "autofix/MTRH-2132", NoHooks: true})
+	res, err := m.Add(repo, AddOptions{Name: "autofix/MTRH-2132"})
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	container := repo + ".worktrees"
-	wantPath := filepath.Join(container, "wt", "autofix", "MTRH-2132")
+	wantPath := filepath.Join(container, "autofix-MTRH-2132")
 	if res.Path != wantPath {
-		t.Fatalf("path = %q, want %q (mirror full branch)", res.Path, wantPath)
+		t.Fatalf("path = %q, want %q (flat sanitized segment)", res.Path, wantPath)
 	}
 	if _, err := os.Stat(wantPath); err != nil {
-		t.Fatalf("nested worktree dir not created: %v", err)
+		t.Fatalf("worktree dir not created: %v", err)
 	}
 
 	if _, err := m.Remove(repo, RemoveOptions{Name: "autofix/MTRH-2132", NoHooks: true}); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(container, "wt")); !os.IsNotExist(err) {
-		t.Errorf("empty parent dirs should be pruned up to the container")
+	if _, err := os.Stat(wantPath); !os.IsNotExist(err) {
+		t.Errorf("worktree dir should be gone")
 	}
 }
 
@@ -229,7 +220,7 @@ func TestManager_AddListRemove_RealGit(t *testing.T) {
 	repo := newRealRepo(t)
 	m := New(gitAdapter{git.New()}, noopHooks{}, staticCfg{})
 
-	res, err := m.Add(repo, AddOptions{Name: "feat", NoHooks: true})
+	res, err := m.Add(repo, AddOptions{Name: "feat"})
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}

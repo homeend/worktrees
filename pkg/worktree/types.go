@@ -9,29 +9,28 @@ type WorktreeInfo struct {
 	Detached bool
 }
 
-// Template is a named branch-name template exposed to the CLI/TUI.
+// Template is a named branch-name template exposed to the CLI/TUI (gg
+// <token> syntax, rendered by internal/naming).
 type Template struct {
 	Name     string
 	Template string
 }
 
-// AddOptions controls Add.
+// AddOptions controls Add. Branch and Name are resolved by the CLI layer:
+// a template renders into Branch; a plain positional argument arrives as
+// Name. With neither set, Add derives from the current worktree's branch
+// when run inside one, and errors at the repo root.
 type AddOptions struct {
-	Name           string // optional; generated if empty
-	Branch         string // optional; defaults to "wt/"+Name
-	BaseRef        string // optional; defaults to config BaseRef
-	NoHooks        bool
-	FromBranch     string // when set: check out this existing branch instead of cutting a new one
-	NoPrefix       bool   // skip the configured branch prefix
-	PrefixOverride string // override the configured prefix for this run (normalized; ignored if NoPrefix)
-	// FromTemplate is set by the CLI when Name was produced by --template. In
-	// derive mode (Add run from inside a worktree) it suppresses reinterpreting
-	// Name as a literal suffix token, so a template-rendered name falls through
-	// to the normal naming path instead of being appended to the parent branch.
-	FromTemplate bool
+	// Name is the raw user-supplied name. In derive mode it becomes the
+	// -<name> suffix on the parent branch; at the repo root it is the branch
+	// name itself.
+	Name string
+	// Branch is a fully rendered branch name used verbatim (template output).
+	// When set it wins everywhere, including inside a worktree.
+	Branch string
 }
 
-// AddResult reports the outcome of Add.
+// AddResult reports the outcome of Add. Name equals the created branch.
 type AddResult struct {
 	Name    string
 	Branch  string
@@ -60,7 +59,7 @@ type RemoveResult struct {
 // RemoveAllPlan is the read-only preview of a kill-em-all operation.
 type RemoveAllPlan struct {
 	Worktrees []WorktreeInfo // non-main, in-container
-	Branches  []string       // prefix-matching short names
+	Branches  []string       // short branch names of those worktrees
 }
 
 // CleanupFailure records a single non-fatal failure during RemoveAll.

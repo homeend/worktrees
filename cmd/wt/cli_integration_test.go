@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/homeend/worktrees/pkg/worktree"
 )
 
 func newRepoForCLI(t *testing.T) string {
@@ -30,11 +32,11 @@ func newRepoForCLI(t *testing.T) string {
 
 func TestNewCommand_CreatesWorktree(t *testing.T) {
 	repo := newRepoForCLI(t)
-	m, err := buildManager(repo)
+	m, _, err := buildManager(repo)
 	if err != nil {
 		t.Fatalf("buildManager: %v", err)
 	}
-	res, err := m.Add(repo, worktreeAddOptions("feat", "", "", true))
+	res, err := m.Add(repo, worktree.AddOptions{Name: "feat"})
 	if err != nil {
 		t.Fatalf("Add via manager: %v", err)
 	}
@@ -45,11 +47,11 @@ func TestNewCommand_CreatesWorktree(t *testing.T) {
 
 func TestRmCommand_RemovesWorktreeAndReportsBranch(t *testing.T) {
 	repo := newRepoForCLI(t)
-	m, err := buildManager(repo)
+	m, _, err := buildManager(repo)
 	if err != nil {
 		t.Fatalf("buildManager: %v", err)
 	}
-	if _, err := m.Add(repo, worktreeAddOptions("feat", "", "", true)); err != nil {
+	if _, err := m.Add(repo, worktree.AddOptions{Name: "feat"}); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	res, err := m.Remove(repo, worktreeRemoveOptions("feat", false, false, false, true))
@@ -63,11 +65,11 @@ func TestRmCommand_RemovesWorktreeAndReportsBranch(t *testing.T) {
 
 func TestPathCommand_PrintsWorktreePath(t *testing.T) {
 	repo := newRepoForCLI(t)
-	m, err := buildManager(repo)
+	m, _, err := buildManager(repo)
 	if err != nil {
 		t.Fatalf("buildManager: %v", err)
 	}
-	added, err := m.Add(repo, worktreeAddOptions("feat", "", "", true))
+	added, err := m.Add(repo, worktree.AddOptions{Name: "feat"})
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}

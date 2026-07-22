@@ -27,10 +27,13 @@ var rmCmd = &cobra.Command{
 	Short: "Remove a worktree and its branch",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m, cwd, err := managerForWorkdir()
+		m, _, cwd, err := managerForWorkdir()
 		if err != nil {
 			return err
 		}
+		// Resolved before the removal: cwd may be inside the worktree being
+		// deleted and no longer exist afterwards.
+		repoRoot, rootErr := repoRootFor(cwd)
 		res, err := m.Remove(cwd, worktreeRemoveOptions(args[0], rmForce, rmForceBranch, rmKeepBranch, rmNoHooks))
 		if err != nil {
 			return err
@@ -43,7 +46,7 @@ var rmCmd = &cobra.Command{
 			fmt.Printf("Kept branch %s (unmerged). Delete with: wt rm %s --force-branch, or git branch -D %s\n",
 				res.Branch, res.Name, res.Branch)
 		}
-		return nil
+		return escapeDeadCwd(cwd, repoRoot, rootErr)
 	},
 }
 

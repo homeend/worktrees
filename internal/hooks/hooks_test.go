@@ -34,7 +34,7 @@ func TestRun_AbsentHookIsNoop(t *testing.T) {
 func TestRun_ExportsEnvAndRuns(t *testing.T) {
 	repo := t.TempDir()
 	target := t.TempDir()
-	writeHook(t, filepath.Join(repo, ".worktrees"), "post-create",
+	writeHook(t, filepath.Join(repo, ".wt"), "post-create",
 		"#!/usr/bin/env bash\necho \"$WT_TARGET_ROOT\" > \"$WT_TARGET_ROOT/marker\"\n", true)
 
 	r := New(repo)
@@ -64,7 +64,7 @@ func TestRun_ExportsAllEnvVars(t *testing.T) {
 	// The hook dumps every WT_* var to a marker file so we can assert each
 	// field-to-variable mapping (catches a typo in env() that the single-var
 	// test would miss).
-	writeHook(t, filepath.Join(repo, ".worktrees"), "post-create",
+	writeHook(t, filepath.Join(repo, ".wt"), "post-create",
 		"#!/usr/bin/env bash\n{\n"+
 			"echo \"$WT_SOURCE_ROOT\"\n"+
 			"echo \"$WT_TARGET_ROOT\"\n"+
@@ -103,7 +103,7 @@ func TestRun_ExportsAllEnvVars(t *testing.T) {
 
 func TestRun_NonExecutableIsSkipped(t *testing.T) {
 	repo := t.TempDir()
-	writeHook(t, filepath.Join(repo, ".worktrees"), "pre-create",
+	writeHook(t, filepath.Join(repo, ".wt"), "pre-create",
 		"#!/usr/bin/env bash\nexit 7\n", false)
 	r := New(repo)
 	if err := r.Run(worktree.HookContext{Event: worktree.PreCreate, Cwd: repo}); err != nil {
@@ -113,7 +113,7 @@ func TestRun_NonExecutableIsSkipped(t *testing.T) {
 
 func TestRun_FailingHookReturnsError(t *testing.T) {
 	repo := t.TempDir()
-	writeHook(t, filepath.Join(repo, ".worktrees"), "pre-create",
+	writeHook(t, filepath.Join(repo, ".wt"), "pre-create",
 		"#!/usr/bin/env bash\nexit 3\n", true)
 	r := New(repo)
 	err := r.Run(worktree.HookContext{Event: worktree.PreCreate, Cwd: repo})
@@ -129,7 +129,7 @@ func TestRun_AllFourEventsRouteByFilename(t *testing.T) {
 		worktree.PreCreate, worktree.PostCreate, worktree.PreRemove, worktree.PostRemove,
 	} {
 		// Each hook writes a marker named after the event into target.
-		writeHook(t, filepath.Join(repo, ".worktrees"), string(ev),
+		writeHook(t, filepath.Join(repo, ".wt"), string(ev),
 			"#!/usr/bin/env bash\ntouch \"$WT_TARGET_ROOT/$WT_HOOK\"\n", true)
 		r := New(repo)
 		if err := r.Run(worktree.HookContext{

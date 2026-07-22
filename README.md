@@ -3,12 +3,13 @@
 `wt` creates, lists, and removes git worktrees in a sibling container, with
 lifecycle hooks for copying gitignored files (like `.env`) into new worktrees.
 
-Each worktree's directory **mirrors its full branch** under
-`<repo>.worktrees/` (slashes become nested subdirectories), so branch
-`wt/2026-…-foo` lives at `<repo>.worktrees/wt/2026-…-foo`. Branches are prefixed
-`wt/` by default. Generated names are date-first
-(`YYYY-MM-DD_HH-mm-<adjective>-<noun>-NNNN`) so they sort chronologically and
-stale branches are easy to spot.
+Each worktree lives in the sibling `<repo>.worktrees/` container, in a
+directory that is the branch name sanitized into **one flat segment**
+(`/` becomes `-`): branch `fix/GH-42` lives at `<repo>.worktrees/fix-GH-42`.
+Branch names are exactly what you type or what a named template renders
+(gg-style `<token>` templates) — never generated, never prefixed. Run
+`wt new` from inside a worktree and it derives a sibling iteration
+(`<branch>-v001`, `-v002`, …) from that worktree's branch.
 
 ## Requirements
 
@@ -79,16 +80,18 @@ cd ~/worktrees && go install .
 cd ~/projects/myrepo
 
 # 3. (optional) scaffold hooks + config in this repo
-wt init                      # creates ./.worktrees/ with config + hook stubs
+wt init                      # creates .wt.toml + ./.wt/ hook stubs
 
-# 4. Create a worktree (auto-generated name)
-wt new
-# -> Created worktree "2026-05-31_14-30-eager-canyon-4821"
-#      branch: wt/2026-05-31_14-30-eager-canyon-4821
-#      path:   ~/projects/myrepo.worktrees/2026-05-31_14-30-eager-canyon-4821
+# 4. Create a worktree — a name is always required (never generated):
+wt new my-feature           # branch my-feature, dir myrepo.worktrees/my-feature
 
-# ...or give it a name:
-wt new my-feature           # branch wt/my-feature, dir myrepo.worktrees/my-feature
+# ...or render one from a named template (see Config below):
+wt new -t fix ticket=42     # e.g. branch fix/42-001, dir myrepo.worktrees/fix-42-001
+wt new -t fix               # missing <user:...> values are asked interactively
+
+# ...or, from INSIDE a worktree, derive a sibling iteration:
+wt new                      # <current-branch>-v001 (lowest free number)
+wt new attempt2             # <current-branch>-attempt2
 
 # 5. See what you have
 wt list                     # table; add --json for machine output
@@ -127,11 +130,10 @@ Keys:
 |-----------|-----------------------------------------------------|
 | `↑`/`↓` (or `k`/`j`) | move the cursor                          |
 | `Enter`   | select the worktree and quit — prints its path, and with the [shell wrapper](#shell-integration--cd-on-enter) installed your shell cd's into it |
-| `n`       | create a new worktree (auto-generated name)         |
-| `b`       | create a worktree from an existing branch (type the branch name, Enter) |
-| `t`       | view configured branch templates                    |
+| `n`       | create a new worktree (asks for the name — names are never generated) |
+| `t`       | template picker — press `1`-`9` to create from a template; its `<user:...>` values are prompted one by one |
 | `d`       | delete the selected worktree (asks `y`/`n`/`f` to confirm — `f` **force**-deletes, discarding uncommitted changes and removing an unmerged branch; the main worktree is refused) |
-| `K`       | **kill-em-all** — remove every worktree and prefixed branch (asks `y`/`n`; hooks skipped) |
+| `K`       | **kill-em-all** — remove every container worktree and its branch (asks `y`/`n`; hooks skipped) |
 | `q` / `Ctrl+C` | quit                                           |
 
 `n` and `d` run the same `wt new` / `wt rm` underneath, so **hooks run and their
@@ -197,17 +199,20 @@ you can cd by hand.
 ## Commands
 
 ```
-wt new [name]        Create a worktree (generated name if omitted)
-wt new -t <ref> k:v  Create from a named/numbered template (var:value pairs)
-wt new --from-branch Create a worktree from an existing local branch
+wt new <name>        Create a worktree (branch = name; name is required)
+wt new -t <name> k=v Create from a named template; missing <user:> values
+                     are asked interactively
+wt new [suffix]      Inside a worktree: derive <branch>-vNNN / <branch>-suffix
 wt list | wt ls      List worktrees (--json for machine output)
 wt rm <name>         Remove a worktree and its branch
 wt path <name>       Print a worktree's absolute path
 wt prune             Clear stale worktree state (git worktree prune)
-wt set <key> <val>   Set a config value (e.g. branch_prefix); --safe
+wt set <key> <val>   Set a .wt.toml value (base_ref, container); --safe
+wt edit              Open .wt.toml in $VISUAL/$EDITOR (--user for user config)
 wt templates         List configured branch templates
-wt kill-em-all       Remove ALL worktrees + prefixed branches (--yes)
-wt init              Scaffold .worktrees/ (config + hook stubs)
+wt kill-em-all       Remove ALL container worktrees + their branches (--yes)
+wt init              Scaffold .wt.toml + .wt/ hook stubs
+wt shell-init <sh>   Print/install the cd-on-Enter shell function (--install)
 wt completion <sh>   Generate shell completion (bash|zsh|fish|powershell)
 wt                   Interactive TUI (when run in a terminal)
 ```
@@ -216,13 +221,8 @@ Common flags:
 
 - `-r, --repo <path>` — operate on another repository (default: current dir).
   Works with every command.
-- `wt new`: `-b/--branch <name>` (branch name; default derived from the name),
-  `--base <ref>` (ref to branch from; default config `base_ref` / `HEAD`),
-  `-t/--template <ref>` (render the branch from a template — see below),
-  `--from-branch <branch>` (check out an existing local branch), `--no-hooks`,
-  `--no-prefix` (don't prepend the configured prefix), `--branch-prefix <value>`
-  (override the prefix for this run; `--no-prefix` wins).
-  `--template`, `--from-branch`, and `--branch` are mutually exclusive.
+- `wt new`: `-t/--template <name>` (render the branch from a named template;
+  remaining args are `var=value` pairs for its `<user:...>` tokens).
 - `wt rm`: `--force` (remove a worktree with uncommitted changes),
   `-D/--force-branch` (force-delete an unmerged branch),
   `--keep-branch` (keep the branch), `--no-hooks`.
@@ -235,7 +235,7 @@ the branch is **kept**, with a message telling you how to force-delete it:
 
 ```
 Removed worktree "my-feature" (.../myrepo.worktrees/my-feature)
-Kept branch wt/my-feature (unmerged). Delete with: wt rm my-feature --force-branch, or git branch -D wt/my-feature
+Kept branch my-feature (unmerged). Delete with: wt rm my-feature --force-branch, or git branch -D my-feature
 ```
 
 ### Removing everything — `wt kill-em-all`
@@ -260,41 +260,34 @@ wt kill-em-all --yes    # no prompt (for scripts)
 
 ### Creating from a template
 
-Define reusable branch templates in `.worktrees/config.yaml` and select one at
-`new` time by **name or 1-based number**, filling variables with `name:value`
-pairs. Templates are Go `text/template` strings (`{{.var}}`); a missing variable
-is an error. The rendered string is appended to the configured branch prefix.
+Define **named** branch templates in `.wt.toml` (or the user config) and pick
+one with `-t <name>`. Templates use the same `<token>` syntax as gg:
 
-```yaml
-# .worktrees/config.yaml
-templates:
-  - name: autofix
-    template: "autofix/{{.ticketName}}"
-  - name: feature
-    template: "feat/{{.ticketName}}"
+| Token | Meaning |
+|-------|---------|
+| `<user:LABEL>` | value supplied as `LABEL=value` — or **asked interactively** when missing |
+| `<seq:NAME:PAD>` | per-repo counter (state in `.git/wt/state.toml`), zero-padded to PAD; consumed only on a successful create |
+| `<date:yyyy-MM-dd>` | current date/time (`yyyy MM dd HH mm ss` tokens; bare `<date>` = `yyyy-MM-dd`) |
+| `<repo>` | repository directory name |
+| `<parent-branch>` | branch of the worktree wt runs in (empty at the repo root) |
+| `<random-alpha:N>` / `<random-num:N>` | N random lowercase letters / digits |
+
+```toml
+# .wt.toml
+[templates]
+fix = "fix/<user:ticket>-<seq:fix:3>"
+spike = "spike/<date>-<random-alpha:4>"
 ```
 
 ```sh
-wt templates                              # list them (index, name, template)
-wt new -t autofix ticketName:ZXXXX-12121  # branch <prefix>autofix/ZXXXX-12121
-wt new -t 1 ticketName:ZXXXX-12121        # same template, by number
+wt templates                # list them (name, template)
+wt new -t fix ticket=GH-42  # branch fix/GH-42-001
+wt new -t fix               # prompts:  ticket: _
 ```
 
-With prefix `mrutkowski/`, that yields branch `mrutkowski/autofix/ZXXXX-12121`
-and worktree dir `<repo>.worktrees/mrutkowski/autofix/ZXXXX-12121` (the directory
-mirrors the full branch). Use `--no-prefix` to skip the prefix, or
-`--branch-prefix <value>` to override it for one run.
-
-### Creating from an existing branch
-
-`wt new --from-branch <branch>` (or the TUI `b` key) checks out an existing
-**local** branch into a new worktree and runs the lifecycle hooks, so the
-workspace is initialized just like a fresh `wt new`. It does not create a new
-branch; if the branch doesn't exist locally, it errors.
-
-```sh
-wt new --from-branch feature/login
-```
+The worktree directory is the branch sanitized into **one flat segment**
+(`/` becomes `-`): branch `fix/GH-42-001` lives at
+`<repo>.worktrees/fix-GH-42-001`.
 
 ---
 
@@ -311,12 +304,12 @@ cd ~/projects/myrepo
 wt init
 ```
 
-This creates a `.worktrees/` directory (commit it to your repo) containing a
-`config.yaml` and four executable hook stubs:
+This creates a commented `.wt.toml` at the repo root and a `.wt/` directory
+(commit both) with four executable hook stubs:
 
 ```
-.worktrees/
-├── config.yaml
+.wt.toml           # per-repo config (overlays the user config)
+.wt/
 ├── pre-create     # runs in the SOURCE repo, before the worktree is created
 ├── post-create    # runs in the NEW worktree, after it is created
 ├── pre-remove     # runs in the worktree being removed, before removal
@@ -408,46 +401,40 @@ esac
 
 ## Config
 
-`.worktrees/config.yaml` (CLI flags override these values):
+Configuration is TOML, layered the same way gg does it (highest wins):
 
-```yaml
-base_ref: HEAD          # default ref new branches are cut from
-container: ""           # override the container path; used verbatim
-name_template: ""       # Go text/template for generated names
-branch_prefix: "wt/"    # prefix for branches created by `wt new`
+1. `<repo>/.wt.toml` — committed per-repo overrides,
+2. `<UserConfigDir>/wt/config.toml` — your user-level defaults
+   (`~/.config/wt/config.toml` on Linux),
+3. built-in defaults (`base_ref = "HEAD"`).
+
+The overlay is field-by-field; a `[templates]` table in a higher layer
+replaces the lower one wholesale.
+
+```toml
+# .wt.toml (or ~/.config/wt/config.toml)
+base_ref = "HEAD"      # ref new branches are cut from (outside derive mode)
+container = ""         # override the default sibling <repo>.worktrees dir
+
+[templates]
+fix = "fix/<user:ticket>-<seq:fix:3>"
+spike = "spike/<date>-<random-alpha:4>"
 ```
 
-### Branch prefix
+Branches are created with exactly the name you give (or the template
+renders) — there is no branch prefix. `<seq:...>` counter state is
+machine-local, stored at `<git-common-dir>/wt/state.toml` (shared by all
+linked worktrees of a repo, never committed).
 
-Branches created by `wt new` are prefixed (default `wt/`). The prefix is
-resolved in this order (highest wins):
-
-1. the `WT_BRANCH_PREFIX` environment variable,
-2. `branch_prefix` in `.worktrees/config.yaml`,
-3. the built-in default `wt/`.
-
-A trailing `/` is appended automatically, so `feature` and `feature/` are
-equivalent. Set it without hand-editing the file using `wt set`:
+Set flat keys without hand-editing the file:
 
 ```sh
-wt set branch_prefix feature          # branches become feature/<name>
-wt set branch_prefix feature --safe   # error if a *different* value is already set
-WT_BRANCH_PREFIX=hotfix wt new        # one-off override via env
+wt set base_ref develop           # writes into .wt.toml
+wt set base_ref develop --safe    # error if a *different* value is already set
 ```
 
 `--safe` is a no-op when the existing value already equals the new one; it only
 errors when a different value is already persisted.
-
-`name_template` is a Go `text/template` with these fields:
-`{{.Date}}` `{{.Adjective}}` `{{.Noun}}` `{{.Digits}}`. For example:
-
-```yaml
-name_template: "{{.Date}}-{{.Adjective}}-{{.Noun}}-{{.Digits}}"   # the default
-# name_template: "{{.Adjective}}-{{.Noun}}"                        # short names
-```
-
-An invalid template (unknown field or syntax error) makes `wt new` fail with a
-clear message instead of producing a bad name.
 
 ---
 

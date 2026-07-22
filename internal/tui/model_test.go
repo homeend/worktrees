@@ -84,17 +84,36 @@ func TestView_EmptyListStillRenders(t *testing.T) {
 	}
 }
 
-func TestNew_CreatesWithGeneratedName(t *testing.T) {
+func TestNew_AsksForNameThenDispatches(t *testing.T) {
 	m, rec := newTestModel(sample())
-	mm, cmd := m.Update(key("n"))
+	cur, cmd := m.Update(key("n"))
+	if cmd != nil {
+		t.Fatal("n must not create immediately (names are never generated)")
+	}
+	if cur.(model).mode != modeInputName {
+		t.Fatalf("n should enter name input mode, got %v", cur.(model).mode)
+	}
+	for _, ch := range []string{"f", "e", "a", "t"} {
+		cur, _ = cur.Update(key(ch))
+	}
+	done, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("n should return an action command immediately")
+		t.Fatal("Enter should dispatch the create action")
 	}
-	if mm.(model).mode != modeNormal {
-		t.Errorf("n should stay in normal mode (instant create), got %v", mm.(model).mode)
+	if done.(model).mode != modeNormal {
+		t.Errorf("mode should return to normal after Enter")
 	}
-	if len(*rec) != 1 || (*rec)[0] != "new --repo /repo" {
-		t.Errorf("runAction = %v, want [new --repo /repo]", *rec)
+	if len(*rec) != 1 || (*rec)[0] != "new feat --repo /repo" {
+		t.Errorf("runAction = %v, want [new feat --repo /repo]", *rec)
+	}
+}
+
+func TestNew_EmptyNameCancels(t *testing.T) {
+	m, rec := newTestModel(sample())
+	cur, _ := m.Update(key("n"))
+	done, cmd := cur.(model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil || done.(model).mode != modeNormal || len(*rec) != 0 {
+		t.Errorf("empty name should cancel without dispatching, rec=%v", *rec)
 	}
 }
 
@@ -163,6 +182,30 @@ func TestDelete_RefusesMainWorktree(t *testing.T) {
 	}
 }
 
+func TestDeleteAndKillAll_EscapeCwdBeforeDispatch(t *testing.T) {
+	m, _ := newTestModel(sample())
+	escaped := 0
+	m.escapeCwd = func() { escaped++ }
+	down, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	conf, _ := down.(model).Update(key("d"))
+	if _, cmd := conf.(model).Update(key("y")); cmd == nil {
+		t.Fatal("y should dispatch")
+	}
+	if escaped != 1 {
+		t.Errorf("delete confirm should escape cwd first, escaped=%d", escaped)
+	}
+
+	m2, _ := newTestModel(sample())
+	m2.escapeCwd = func() { escaped++ }
+	conf2, _ := m2.Update(key("K"))
+	if _, cmd := conf2.(model).Update(key("y")); cmd == nil {
+		t.Fatal("kill-all y should dispatch")
+	}
+	if escaped != 2 {
+		t.Errorf("kill-all confirm should escape cwd first, escaped=%d", escaped)
+	}
+}
+
 func TestKillAll_KeyEntersConfirm(t *testing.T) {
 	m, _ := newTestModel(sample())
 	updated, _ := m.Update(key("K"))
@@ -198,39 +241,75 @@ func TestKillAll_ConfirmNoCancels(t *testing.T) {
 	}
 }
 
-func TestFromBranch_KeyEntersInput(t *testing.T) {
-	m, _ := newTestModel(sample())
-	updated, _ := m.Update(key("b"))
-	if updated.(model).mode != modeInputBranch {
-		t.Errorf("mode = %v, want modeInputBranch", updated.(model).mode)
-	}
-}
-
-func TestFromBranch_TypeAndEnterDispatches(t *testing.T) {
+func TestNameInput_EscCancels(t *testing.T) {
 	m, rec := newTestModel(sample())
-	cur := tea.Model(m)
-	cur, _ = cur.Update(key("b"))
-	for _, ch := range []string{"f", "e", "a", "t"} {
-		cur, _ = cur.Update(key(ch))
-	}
-	done, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal("Enter should dispatch an action")
-	}
-	if done.(model).mode != modeNormal {
-		t.Errorf("mode should return to normal after Enter")
-	}
-	if len(*rec) != 1 || (*rec)[0] != "new --from-branch feat --repo /repo" {
-		t.Errorf("runAction = %v, want [new --from-branch feat --repo /repo]", *rec)
-	}
-}
-
-func TestFromBranch_EscCancels(t *testing.T) {
-	m, rec := newTestModel(sample())
-	cur, _ := m.Update(key("b"))
+	cur, _ := m.Update(key("n"))
 	cur, _ = cur.(model).Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cur.(model).mode != modeNormal {
 		t.Errorf("Esc should cancel to normal mode")
+	}
+	if len(*rec) != 0 {
+		t.Errorf("cancel should run no action, got %v", *rec)
+	}
+}
+
+func TestTemplates_DigitOnNoVarTemplateDispatches(t *testing.T) {
+	m, rec := newTestModel(sample())
+	m.templates = []worktree.Template{{Name: "spike", Template: "spike/<date>"}}
+	cur, _ := m.Update(key("t"))
+	done, cmd := cur.(model).Update(key("1"))
+	if cmd == nil {
+		t.Fatal("digit on a var-less template should dispatch immediately")
+	}
+	if done.(model).mode != modeNormal {
+		t.Errorf("mode should return to normal, got %v", done.(model).mode)
+	}
+	if len(*rec) != 1 || (*rec)[0] != "new -t spike --repo /repo" {
+		t.Errorf("runAction = %v, want [new -t spike --repo /repo]", *rec)
+	}
+}
+
+func TestTemplates_DigitPromptsForVarsThenDispatches(t *testing.T) {
+	m, rec := newTestModel(sample())
+	m.templates = []worktree.Template{{Name: "fix", Template: "fix/<user:ticket>-<user:who>"}}
+	cur, _ := m.Update(key("t"))
+	cur, cmd := cur.(model).Update(key("1"))
+	if cmd != nil {
+		t.Fatal("template with vars must prompt, not dispatch")
+	}
+	if cur.(model).mode != modeInputVar {
+		t.Fatalf("mode = %v, want modeInputVar", cur.(model).mode)
+	}
+	// First label: ticket
+	for _, ch := range []string{"4", "2"} {
+		cur, _ = cur.Update(key(ch))
+	}
+	cur, cmd = cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatal("one label left — must keep prompting")
+	}
+	// Second label: who
+	cur, _ = cur.Update(key("m"))
+	done, cmd := cur.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("last label collected — should dispatch")
+	}
+	if done.(model).mode != modeNormal {
+		t.Errorf("mode should return to normal after dispatch")
+	}
+	if len(*rec) != 1 || (*rec)[0] != "new -t fix ticket=42 who=m --repo /repo" {
+		t.Errorf("runAction = %v, want [new -t fix ticket=42 who=m --repo /repo]", *rec)
+	}
+}
+
+func TestTemplates_VarInputEscCancels(t *testing.T) {
+	m, rec := newTestModel(sample())
+	m.templates = []worktree.Template{{Name: "fix", Template: "fix/<user:ticket>"}}
+	cur, _ := m.Update(key("t"))
+	cur, _ = cur.(model).Update(key("1"))
+	done, _ := cur.(model).Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if done.(model).mode != modeNormal {
+		t.Errorf("Esc should cancel the var prompt")
 	}
 	if len(*rec) != 0 {
 		t.Errorf("cancel should run no action, got %v", *rec)

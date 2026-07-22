@@ -8,16 +8,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const configTemplate = `# wt configuration. CLI flags override these values.
-# base_ref: HEAD          # default ref new branches are cut from
-# container: ""           # override container path; used verbatim
-# name_template: ""       # Go text/template for generated names; fields:
-#                         #   {{.Date}} {{.Adjective}} {{.Noun}} {{.Digits}}
-#                         # e.g. "{{.Date}}-{{.Adjective}}-{{.Noun}}-{{.Digits}}"
-# branch_prefix: "wt/"    # prefix for branches created by 'wt new' (env: WT_BRANCH_PREFIX)
-# templates:               # named branch templates for 'wt new -t <name|number>'
-#   - name: autofix        #   vars are Go text/template fields, e.g. {{.ticketName}}
-#     template: "autofix/{{.ticketName}}"
+const repoConfigTemplate = `# wt per-repo configuration (.wt.toml, committed). Overlays the user-level
+# config at <UserConfigDir>/wt/config.toml field-by-field; only keys set here
+# win. Same layering as gg's .gg.toml.
+#
+# base_ref = "HEAD"     # ref new branches are cut from (outside derive mode)
+# container = ""        # override the default sibling <repo>.worktrees dir
+#
+# Named branch templates for 'wt new -t <name>'. Tokens:
+#   <user:LABEL>        value asked interactively (or passed as LABEL=value)
+#   <seq:NAME:PAD>      per-repo counter, zero-padded (state in .git/wt/)
+#   <date:yyyy-MM-dd>   current date/time (yyyy MM dd HH mm ss tokens)
+#   <repo>              repository directory name
+#   <parent-branch>     branch of the worktree wt runs in (empty at root)
+#   <random-alpha:N>    N random lowercase letters
+#   <random-num:N>      N random digits
+#
+# [templates]
+# fix = "fix/<user:ticket>-<seq:fix:3>"
+# spike = "spike/<date>-<random-alpha:4>"
 `
 
 const hookTemplate = `#!/usr/bin/env bash
@@ -29,14 +38,14 @@ const hookTemplate = `#!/usr/bin/env bash
 exit 0
 `
 
-// scaffold creates .worktrees/ with a config and executable hook stubs. It never
-// clobbers an existing file (idempotent).
+// scaffold creates .wt/ with executable hook stubs and a commented .wt.toml
+// at the repo root. It never clobbers an existing file (idempotent).
 func scaffold(repoRoot string) error {
-	dir := filepath.Join(repoRoot, ".worktrees")
+	dir := filepath.Join(repoRoot, ".wt")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if err := writeIfAbsent(filepath.Join(dir, "config.yaml"), configTemplate, 0o644); err != nil {
+	if err := writeIfAbsent(filepath.Join(repoRoot, ".wt.toml"), repoConfigTemplate, 0o644); err != nil {
 		return err
 	}
 	for _, ev := range []string{"pre-create", "post-create", "pre-remove", "post-remove"} {
@@ -57,7 +66,7 @@ func writeIfAbsent(path, content string, mode os.FileMode) error {
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Scaffold .worktrees/ with config and hook stubs",
+	Short: "Scaffold .wt/ hook stubs and a commented .wt.toml",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cwd, err := workdir()
 		if err != nil {
@@ -66,7 +75,7 @@ var initCmd = &cobra.Command{
 		if err := scaffold(cwd); err != nil {
 			return err
 		}
-		fmt.Println("Initialized .worktrees/ (config.yaml + hook stubs).")
+		fmt.Println("Initialized .wt.toml and .wt/ hook stubs.")
 		return nil
 	},
 }
