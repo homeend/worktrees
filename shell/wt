@@ -1,0 +1,13 @@
+#!/bin/sh
+# wt entry point: transparently exec's the real binary (wt.bin next to this
+# script), so `wt <anything>` behaves exactly like the binary.
+#
+# Note an executed script can never cd your shell. For cd-on-Enter in the
+# TUI, install the shell function once in ~/.bashrc / ~/.zshrc:
+#   eval "$(/path/to/bin/wt shell-init zsh)"   # or: shell-init bash
+# The function then shadows this script by name and handles the cd.
+self="$0"
+if [ -L "$self" ]; then
+  self="$(readlink -f "$self" 2>/dev/null || echo "$self")"
+fi
+exec "$(dirname "$self")/wt.bin" "$@"

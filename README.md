@@ -155,20 +155,39 @@ A child process can never change its parent shell's directory, so the
 the wrapper cd's after `wt` exits (the same pattern fzf, lazygit and yazi
 use).
 
-**bash / zsh** — source the function from your rc file:
+The build produces `bin/` with the real binaries named `wt.bin` /
+`wt.bin.exe` and thin `wt` entry points in front of them (`bin/wt` script,
+`bin\wt.cmd` batch), so `wt` is the name you use on both platforms.
+
+**bash / zsh** — let wt install itself (appends one line to your rc file;
+idempotent, so rerunning is safe — on a new machine this is the whole setup):
 
 ```sh
-# ~/.bashrc or ~/.zshrc
-source /path/to/wt/shell/wt.sh
+/path/to/bin/wt shell-init zsh --install    # or: shell-init bash --install
+source ~/.zshrc                             # or open a new terminal
 ```
 
-**cmd.exe** — use `shell/wt.cmd`. Either place it in a `PATH` directory that
-is searched *before* the one holding `wt.exe` (within one directory cmd
-prefers `.exe` over `.cmd`), or define a macro:
+The line it adds evals the function emitted by the binary itself, bound to
+it by absolute path, so no PATH setup is needed:
 
-```bat
-doskey wt="T:\path\to\wt\shell\wt.cmd" $*
+```sh
+# ~/.bashrc or ~/.zshrc (zsh honors ZDOTDIR)
+eval "$('/path/to/bin/wt.bin' shell-init zsh)"
 ```
+
+Then type plain `wt` anywhere: the function opens the TUI and cd's your
+shell on Enter. (Invoking `bin/wt` by path still works for everything else,
+but an executed script cannot cd your shell — only the function can.)
+Alternatively source the equivalent static file `shell/wt.sh` (also copied
+to `bin/wt.sh` by the build scripts).
+
+**cmd.exe** — add the `bin\` directory to `PATH`; that's the whole install.
+The build deliberately names the Windows binary `wt.bin.exe` instead of
+`wt.exe`: within one directory cmd prefers `.exe` over `.cmd`, so a `wt.exe`
+would shadow the wrapper. With no `wt.exe` around, typing `wt` resolves to
+`bin\wt.cmd`, which launches the `wt.bin.exe` sitting next to it and cd's
+after it exits. (Remove any old `wt.exe` copies from `PATH` directories or
+they will shadow the wrapper.)
 
 Without a wrapper, Enter still quits the TUI and prints the selected path so
 you can cd by hand.
