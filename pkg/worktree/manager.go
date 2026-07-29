@@ -225,10 +225,10 @@ func (m *Manager) Add(dir string, opts AddOptions) (AddResult, error) {
 	return AddResult{Name: branch, Branch: branch, Path: target, BaseRef: baseRef}, nil
 }
 
-// List returns the worktrees wt manages: the main working tree (flagged IsMain)
-// plus any worktree living inside this repo's container. Linked worktrees git
-// knows about but that live elsewhere are omitted, since wt only manages the
-// container.
+// List returns every worktree git reports: the main working tree (flagged
+// IsMain) plus all linked worktrees, whether they live in this repo's
+// container or were created elsewhere by other tools. wt manages them all;
+// only the main worktree is protected from removal.
 func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
 	repoRoot, err := m.git.MainRoot(dir)
 	if err != nil {
@@ -238,17 +238,12 @@ func (m *Manager) List(dir string) ([]WorktreeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	container := m.containerPath(repoRoot)
 	out := make([]WorktreeInfo, 0, len(raw))
 	for _, w := range raw {
-		// pathsEqual/hasPathPrefix tolerate the separator and drive-letter-case
-		// differences between git-emitted paths and filepath-built ones on
-		// Windows; a byte-for-byte comparison would filter everything out there.
+		// pathsEqual tolerates the separator and drive-letter-case differences
+		// between git-emitted paths and filepath-built ones on Windows; a
+		// byte-for-byte comparison would never flag the main worktree there.
 		isMain := pathsEqual(w.Path, repoRoot)
-		inContainer := hasPathPrefix(w.Path, container)
-		if !isMain && !inContainer {
-			continue
-		}
 		out = append(out, WorktreeInfo{
 			Path:     w.Path,
 			Branch:   w.Branch,
@@ -408,9 +403,9 @@ func (m *Manager) Find(dir, name string) (WorktreeInfo, error) {
 }
 
 // PlanRemoveAll returns the read-only preview of a kill-em-all run: every
-// non-main worktree in the container and each one's branch. It performs no
-// mutation. Branches with no container worktree are not swept (there is no
-// branch prefix to identify them by anymore).
+// non-main worktree git reports (in the container or elsewhere) and each
+// one's branch. It performs no mutation. Branches with no worktree are not
+// swept (there is no branch prefix to identify them by anymore).
 func (m *Manager) PlanRemoveAll(dir string) (RemoveAllPlan, error) {
 	list, err := m.List(dir)
 	if err != nil {
@@ -429,7 +424,7 @@ func (m *Manager) PlanRemoveAll(dir string) (RemoveAllPlan, error) {
 	return plan, nil
 }
 
-// RemoveAll force-removes every non-main container worktree and force-deletes
+// RemoveAll force-removes every non-main worktree and force-deletes
 // their branches, skipping lifecycle hooks. It is best-effort: a failure on
 // one item is recorded and execution continues. A non-nil error is returned
 // only for a fatal setup failure (e.g. planning). A final `git worktree

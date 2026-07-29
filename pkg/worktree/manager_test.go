@@ -360,23 +360,74 @@ func TestList_MapsGitWorktrees(t *testing.T) {
 	}
 }
 
-func TestList_ExcludesWorktreesOutsideContainer(t *testing.T) {
+func TestList_IncludesWorktreesOutsideContainer(t *testing.T) {
 	m, g, _ := newTestManager("/home/me/myrepo")
 	g.worktrees = []GitWorktree{
 		{Path: "/home/me/myrepo", Branch: "refs/heads/main"},
 		{Path: "/home/me/myrepo.worktrees/feat", Branch: "refs/heads/feat"},
-		{Path: "/elsewhere/external", Branch: "refs/heads/other"},
+		{Path: "/home/me/myrepo/.claude/worktrees/external", Branch: "refs/heads/other"},
 	}
 	list, err := m.List(".")
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(list) != 2 {
-		t.Fatalf("want 2 (main + container), got %d: %+v", len(list), list)
+	if len(list) != 3 {
+		t.Fatalf("want 3 (every worktree git reports), got %d: %+v", len(list), list)
 	}
-	for _, w := range list {
-		if w.Path == "/elsewhere/external" {
-			t.Errorf("worktree outside the container should be excluded")
+	var ext *WorktreeInfo
+	for i := range list {
+		if list[i].Path == "/home/me/myrepo/.claude/worktrees/external" {
+			ext = &list[i]
+		}
+	}
+	if ext == nil {
+		t.Fatal("worktree outside the container should be listed")
+	}
+	if ext.IsMain {
+		t.Errorf("external worktree must not be flagged as main")
+	}
+}
+
+func TestResolveWorktree_ExternalByBranchAndLeaf(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	g.worktrees = []GitWorktree{
+		{Path: "/home/me/myrepo", Branch: "refs/heads/main"},
+		{Path: "/home/me/myrepo/.claude/worktrees/drop-newest", Branch: "refs/heads/fix/drop-newest"},
+	}
+	for _, name := range []string{"fix/drop-newest", "drop-newest"} {
+		w, err := m.resolveWorktree(".", name)
+		if err != nil {
+			t.Fatalf("resolveWorktree(%q): %v", name, err)
+		}
+		if w.Path != "/home/me/myrepo/.claude/worktrees/drop-newest" {
+			t.Errorf("resolveWorktree(%q) path = %q, want the external worktree", name, w.Path)
+		}
+	}
+}
+
+func TestPlanRemoveAll_IncludesExternalWorktrees(t *testing.T) {
+	m, g, _ := newTestManager("/home/me/myrepo")
+	g.worktrees = []GitWorktree{
+		{Path: "/home/me/myrepo", Branch: "refs/heads/main"},
+		{Path: "/home/me/myrepo.worktrees/feat", Branch: "refs/heads/feat"},
+		{Path: "/home/me/myrepo/.claude/worktrees/external", Branch: "refs/heads/other"},
+	}
+	plan, err := m.PlanRemoveAll(".")
+	if err != nil {
+		t.Fatalf("PlanRemoveAll: %v", err)
+	}
+	if len(plan.Worktrees) != 2 {
+		t.Fatalf("want 2 non-main worktrees in plan, got %d: %+v", len(plan.Worktrees), plan.Worktrees)
+	}
+	wantBranches := map[string]bool{"feat": false, "other": false}
+	for _, b := range plan.Branches {
+		if _, ok := wantBranches[b]; ok {
+			wantBranches[b] = true
+		}
+	}
+	for b, seen := range wantBranches {
+		if !seen {
+			t.Errorf("branch %q missing from plan", b)
 		}
 	}
 }

@@ -83,7 +83,7 @@ func runKillEmAll(k killer, repoRoot string, opts killOpts, out io.Writer) error
 
 var killEmAllCmd = &cobra.Command{
 	Use:   "kill-em-all",
-	Short: "Remove ALL container worktrees and their branches (destructive)",
+	Short: "Remove ALL non-main worktrees and their branches (destructive)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m, _, cwd, err := managerForWorkdir()

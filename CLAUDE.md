@@ -100,7 +100,7 @@
 - **wt new**: cmd layer loads config, renders template (interactive `<user:>` prompts on TTY, `<seq:>` peek via git common dir) → `Manager.Add` with a final `Branch`, or a raw `Name`; derive mode triggers inside a worktree when no rendered Branch is given; seq counters bump only after success.
 - **cd-on-Enter**: TUI records selection → `emitSelection` prints it and writes `--cd-file`; shell wrapper (`wt()` function from `shell-init`, `wt` script, or `wt.cmd`) cd's after exit. A child process can never cd its parent — the wrapper layer is mandatory.
 - **Destructive ops**: `Manager.Remove`/`RemoveAll` call `EscapeCwd` first (a dir that is any process's cwd cannot be deleted on Windows); `rm`/`kill-em-all`/TUI write the repo root to `--cd-file` when the starting directory was removed (`escapeDeadCwd`).
-- **kill-em-all** sweeps container worktrees and *their* branches only — no prefix exists to find orphaned branches.
+- **kill-em-all** sweeps every non-main worktree git reports (container or external) and *their* branches — no prefix exists to find orphaned branches.
 
 ## Architectural Constraints
 - `pkg/worktree` → `internal/naming` only; `internal/git`/`internal/hooks` import `pkg/worktree` types (one-way)

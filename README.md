@@ -139,7 +139,7 @@ Keys:
 | `n`       | create a new worktree (asks for the name — names are never generated) |
 | `t`       | template picker — press `1`-`9` to create from a template; its `<user:...>` values are prompted one by one |
 | `d`       | delete the selected worktree (asks `y`/`n`/`f` to confirm — `f` **force**-deletes, discarding uncommitted changes and removing an unmerged branch; the main worktree is refused) |
-| `K`       | **kill-em-all** — remove every container worktree and its branch (asks `y`/`n`; hooks skipped) |
+| `K`       | **kill-em-all** — remove every non-main worktree and its branch (asks `y`/`n`; hooks skipped) |
 | `q` / `Ctrl+C` | quit                                           |
 
 `n` and `d` run the same `wt new` / `wt rm` underneath, so **hooks run and their
@@ -216,7 +216,7 @@ wt prune             Clear stale worktree state (git worktree prune)
 wt set <key> <val>   Set a .wt.toml value (base_ref, container); --safe
 wt edit              Open .wt.toml in $VISUAL/$EDITOR (--user for user config)
 wt templates         List configured branch templates
-wt kill-em-all       Remove ALL container worktrees + their branches (--yes)
+wt kill-em-all       Remove ALL non-main worktrees + their branches (--yes)
 wt init              Scaffold .wt.toml + .wt/ hook stubs
 wt shell-init <sh>   Print/install the cd-on-Enter shell function (--install)
 wt completion <sh>   Generate shell completion (bash|zsh|fish|powershell)
@@ -247,10 +247,11 @@ Kept branch my-feature (unmerged). Delete with: wt rm my-feature --force-branch,
 ### Removing everything — `wt kill-em-all`
 
 `wt kill-em-all` is a destructive clean-slate cleanup: it **force-removes every
-worktree** in the repo's container and **force-deletes each one's branch**.
-Removal is forced regardless of committed/uncommitted state. The main worktree
-and its branch are never touched; branches without a container worktree are
-not swept (there is no branch prefix to identify them by).
+linked worktree** git reports — in the repo's container or created elsewhere by
+other tools — and **force-deletes each one's branch**. Removal is forced
+regardless of committed/uncommitted state. The main worktree and its branch are
+never touched; branches without a worktree are not swept (there is no branch
+prefix to identify them by).
 
 - **Lifecycle hooks are skipped** (a notice is printed).
 - Safe to run from **inside** a worktree: the process moves itself out first
