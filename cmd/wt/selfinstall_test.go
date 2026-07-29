@@ -69,6 +69,64 @@ func TestSelfInstallAt_Posix(t *testing.T) {
 	}
 }
 
+func TestBootstrapHelpFor_Posix(t *testing.T) {
+	help := bootstrapHelpFor("/home/u/go/bin/worktrees", "linux")
+	for _, want := range []string{
+		"/home/u/go/bin",         // where the entry points land
+		"wt.bin",                 // the real binary
+		"shell-init",             // shell integration guidance
+		"--install",
+		"PATH",
+	} {
+		if !strings.Contains(help, want) {
+			t.Errorf("posix bootstrap help missing %q:\n%s", want, help)
+		}
+	}
+	// Bootstrap help must not be the full CLI help: no subcommand listing.
+	for _, reject := range []string{"kill-em-all", "templates", "Usage:"} {
+		if strings.Contains(help, reject) {
+			t.Errorf("posix bootstrap help must not mention %q:\n%s", reject, help)
+		}
+	}
+}
+
+func TestBootstrapHelpFor_Windows(t *testing.T) {
+	help := bootstrapHelpFor(`C:\Users\u\go\bin\worktrees.exe`, "windows")
+	for _, want := range []string{`C:\Users\u\go\bin`, "wt.cmd", "wt.bin.exe", "PATH"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("windows bootstrap help missing %q:\n%s", want, help)
+		}
+	}
+	if strings.Contains(help, "shell-init") {
+		t.Errorf("windows bootstrap help must not mention shell-init (POSIX only):\n%s", help)
+	}
+}
+
+func TestRunBootstrap_InstallsAndPrintsOnlyBootstrapHelp(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "worktrees")
+	if err := os.WriteFile(exe, []byte("BINARY"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut strings.Builder
+	code := runBootstrap(exe, "linux", &out, &errOut)
+	if code != 0 {
+		t.Fatalf("runBootstrap = %d, want 0 (stderr: %s)", code, errOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "wt.bin")); err != nil {
+		t.Errorf("wt.bin should be installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "wt")); err != nil {
+		t.Errorf("wt entry script should be installed: %v", err)
+	}
+	if !strings.Contains(out.String(), "shell-init") {
+		t.Errorf("stdout should carry the bootstrap help:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "kill-em-all") {
+		t.Errorf("stdout must not carry the full CLI help:\n%s", out.String())
+	}
+}
+
 func TestSelfInstallAt_Windows(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "worktrees.exe")

@@ -125,9 +125,14 @@ func templateSlice(cfg config.Config) []worktree.Template {
 	return out
 }
 
-// Execute runs the root command and returns a process exit code.
+// Execute runs the root command and returns a process exit code. Invoked
+// under the full name ("worktrees"), the process is purely a bootstrapper:
+// it installs the wt entry points and prints how to finish setup — the wt
+// CLI only answers to the wt names.
 func Execute() int {
-	maybeSelfInstall()
+	if exe, err := os.Executable(); err == nil && isFullNameInvocation(exe) {
+		return runBootstrap(exe, runtime.GOOS, os.Stdout, os.Stderr)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		err = classify(err)
 		fmt.Fprintln(os.Stderr, "error:", err)

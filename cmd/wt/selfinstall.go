@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -152,23 +152,62 @@ func selfInstallAt(exe, goos string) (bool, error) {
 	return changed, nil
 }
 
-// maybeSelfInstall bootstraps the wt entry points when the process was
-// launched via the full-name binary. Failures are reported but never block
-// the actual command.
-func maybeSelfInstall() {
-	exe, err := os.Executable()
-	if err != nil || !isFullNameInvocation(exe) {
-		return
+// exeDirOf returns the directory of exe, splitting on both separators so
+// Windows paths parse in unit tests on any host (exe itself comes from
+// os.Executable at runtime, so this costs nothing there).
+func exeDirOf(exe string) string {
+	if i := strings.LastIndexAny(exe, `/\`); i >= 0 {
+		return exe[:i]
 	}
-	changed, err := selfInstallAt(exe, runtime.GOOS)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "wt: self-install: %v\n", err)
-		return
+	return "."
+}
+
+// bootstrapHelpFor is everything the full-name binary prints: where the wt
+// entry points were materialized and how to finish setting up. The full CLI
+// help deliberately stays behind the wt name — running `worktrees` is a
+// bootstrap step, not a way to drive the tool.
+func bootstrapHelpFor(exe, goos string) string {
+	dir := exeDirOf(exe)
+	if goos == "windows" {
+		return fmt.Sprintf(`wt entry points are installed in %s:
+
+  wt.bin.exe   the real binary
+  wt.cmd       entry point — type wt (it also cds into the worktree you pick with Enter)
+
+To finish setting up:
+
+  1. Add %s to your PATH.
+  2. Run wt inside any git repo.
+
+For the full command reference run: wt --help
+`, dir, dir)
 	}
-	if changed {
-		fmt.Fprintf(os.Stderr, "wt: installed wt entry points next to %s\n", exe)
-		if runtime.GOOS != "windows" {
-			fmt.Fprintf(os.Stderr, "wt: for cd-on-Enter run: %s shell-init zsh --install\n", filepath.Join(filepath.Dir(exe), "wt"))
-		}
+	wtPath := dir + "/wt"
+	return fmt.Sprintf(`wt entry points are installed in %s:
+
+  wt.bin   the real binary
+  wt       entry point — run this
+
+To finish setting up:
+
+  1. Put %s on your PATH (or call %s directly).
+  2. Install the shell integration for cd-on-Enter:
+       %s shell-init zsh --install   (or: bash; then restart your shell)
+  3. Run wt inside any git repo.
+
+For the full command reference run: wt --help
+`, dir, dir, wtPath, wtPath)
+}
+
+// runBootstrap is the whole program when invoked under the full name
+// ("worktrees"): refresh the wt entry points next to the binary and print
+// the bootstrap help — never the wt CLI.
+func runBootstrap(exe, goos string, out, errOut io.Writer) int {
+	code := 0
+	if _, err := selfInstallAt(exe, goos); err != nil {
+		fmt.Fprintf(errOut, "worktrees: self-install: %v\n", err)
+		code = 1
 	}
+	fmt.Fprint(out, bootstrapHelpFor(exe, goos))
+	return code
 }
