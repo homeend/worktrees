@@ -42,19 +42,7 @@ eval "$(wt shell-init zsh)"    # or: shell-init bash — add to ~/.zshrc / ~/.ba
 > directory and the rc line breaks. The eval form re-resolves `wt` from PATH
 > at every shell startup, so upgrades just work.
 
-### Go toolchain
-
-`wt` is installed with the Go toolchain. The installed binary lands in your Go
-bin directory — `$(go env GOPATH)/bin` (typically `~/go/bin`), or `$GOBIN` if
-set — under the name `worktrees`, which is only the **installer** (see the
-name table below). Run it with the directory that should hold the actual `wt`:
-
-```sh
-worktrees ~/.local/bin   # copies wt.bin + the wt entry point there
-export PATH="$PATH:$HOME/.local/bin"   # add to ~/.bashrc or ~/.zshrc
-```
-
-### One binary, two behaviors — the executable's name decides
+### Go toolchain — the `worktrees` installer
 
 It is all a single executable, but what running it does depends on the file
 name it was started under:
@@ -64,50 +52,38 @@ name it was started under:
 | `worktrees` / `worktrees.exe` | **Installer only.** `worktrees <dir>` copies the wt files into `<dir>` and prints the finish-setup steps. Run without a path it prints only a short usage message (with the platform's setup remarks) and exits with code 2 — it never opens the TUI and never runs subcommands, whatever the arguments. |
 | `wt`, `wt.bin`, `wt.bin.exe` — any other name | **The actual tool**: full CLI, TUI, `--help`, everything documented below. |
 
+`go install` produces the installer name. This repo is not published to a
+module proxy yet, so install from the local checkout:
+
+```sh
+cd ~/worktrees     # the directory containing go.mod
+go install .       # → $(go env GOPATH)/bin/worktrees (or $GOBIN)
+```
+
+(Once the module is pushed to `github.com/homeend/worktrees`, plain
+`go install github.com/homeend/worktrees@latest` will work without cloning.)
+
+Then point the installer at the directory that should hold your `wt` and put
+that directory on `PATH`:
+
+```sh
+worktrees ~/.local/bin                   # any directory you like
+export PATH="$PATH:$HOME/.local/bin"     # add to ~/.bashrc or ~/.zshrc
+```
+
 `worktrees <dir>` places in `<dir>` (created if missing, refreshed if present):
 
 - `wt.bin` (`wt.bin.exe` on Windows) — the real binary, a copy of the installer itself;
 - `wt` (POSIX script) or `wt.cmd` (Windows batch) — the entry point you type; it runs the sibling `wt.bin` and performs the cd-on-Enter;
 - deliberately **no `wt.exe`** on Windows — cmd.exe would resolve it before `wt.cmd` and break the cd wrapper.
 
-Setup is therefore always the same two steps: get the `worktrees` binary
-(via `go install` or a build script), then point it at the directory that
-should hold your `wt`:
-
-```sh
-worktrees ~/.local/bin   # any directory you like; put it on PATH
-```
-
-### Option A — install from this repository (works today)
-
-This repo is not published to a module proxy yet, so install it from the local
-checkout:
-
-```sh
-cd ~/worktrees     # the directory containing go.mod
-go install .
-worktrees ~/.local/bin   # installs the wt entry points into that directory
-```
-
-`go install` names the binary `worktrees` — the installer name from the
-table above. After a `go install` upgrade, run `worktrees <dir>` again to
-refresh the installed copies. Verify, then wire up cd-on-Enter:
+After a `go install` upgrade, run `worktrees <dir>` again to refresh the
+installed copies. Verify, then wire up cd-on-Enter:
 
 ```sh
 wt --help
 wt shell-init zsh --install    # bash/zsh; Windows cmd needs nothing extra
 ```
-
-### Option B — install via module path (once published)
-
-After this module is pushed to its remote (`github.com/homeend/worktrees`), anyone
-can install it without cloning:
-
-```sh
-go install github.com/homeend/worktrees@latest
-```
-
-Until then, use Option A.
 
 ### Last resort — run straight from the folder (no install)
 
