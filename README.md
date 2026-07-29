@@ -20,6 +20,21 @@ Branch names are exactly what you type or what a named template renders
 
 ## Install
 
+### Homebrew (macOS / Linux, prebuilt binary)
+
+```sh
+brew install homeend/tap/wt
+```
+
+This installs the `wt` binary directly. For cd-on-Enter in the TUI, install
+the shell function once (it shadows the binary by name and handles the cd):
+
+```sh
+eval "$(wt shell-init zsh)"    # or: shell-init bash — add to ~/.zshrc / ~/.bashrc
+```
+
+### Go toolchain
+
 `wt` is installed with the Go toolchain. The installed binary lands in your Go
 bin directory — `$(go env GOPATH)/bin` (typically `~/go/bin`), or `$GOBIN` if set.
 

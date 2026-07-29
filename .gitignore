@@ -17,3 +17,6 @@
 /wt.bin.exe
 /wt.cmd
 /wt.sh
+
+# goreleaser build output
+dist/
