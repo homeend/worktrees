@@ -72,8 +72,11 @@ brews:
     description: Fast git worktree manager with lifecycle hooks and cd-on-switch shell integration
     license: MIT
     caveats: |
-      For cd-on-Enter in the TUI, install the shell function once:
+      For cd-on-Enter in the TUI, add to ~/.zshrc / ~/.bashrc:
         eval "$(wt shell-init zsh)"    # or: shell-init bash
+      Use exactly that eval-from-PATH form. Do NOT use
+      `wt shell-init --install` with a brew-installed wt: it pins the
+      version-numbered Cellar path, which breaks on the next upgrade.
     test: |
       system "#{bin}/wt", "--help"
     commit_author:

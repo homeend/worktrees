@@ -26,22 +26,56 @@ Branch names are exactly what you type or what a named template renders
 brew install homeend/tap/wt
 ```
 
-This installs the `wt` binary directly. For cd-on-Enter in the TUI, install
-the shell function once (it shadows the binary by name and handles the cd):
+This installs the `wt` binary directly — with brew there is no separate
+installer step (`worktrees <dir>`) and no `wt`/`wt.bin` pair; brew's job *is*
+placing the binary. For cd-on-Enter in the TUI, install the shell function
+once (it shadows the binary by name and handles the cd):
 
 ```sh
 eval "$(wt shell-init zsh)"    # or: shell-init bash — add to ~/.zshrc / ~/.bashrc
 ```
 
+> With a brew-installed `wt`, use exactly this eval-from-PATH line — **don't**
+> use `wt shell-init zsh --install` here. `--install` writes the running
+> binary's resolved location into your rc file, which under Homebrew is the
+> version-numbered Cellar path; the next `brew upgrade wt` deletes that
+> directory and the rc line breaks. The eval form re-resolves `wt` from PATH
+> at every shell startup, so upgrades just work.
+
 ### Go toolchain
 
 `wt` is installed with the Go toolchain. The installed binary lands in your Go
-bin directory — `$(go env GOPATH)/bin` (typically `~/go/bin`), or `$GOBIN` if set.
-
-**Make sure that directory is on your `PATH`** so you can run `wt` from anywhere:
+bin directory — `$(go env GOPATH)/bin` (typically `~/go/bin`), or `$GOBIN` if
+set — under the name `worktrees`, which is only the **installer** (see the
+name table below). Run it with the directory that should hold the actual `wt`:
 
 ```sh
-export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.bashrc or ~/.zshrc
+worktrees ~/.local/bin   # copies wt.bin + the wt entry point there
+export PATH="$PATH:$HOME/.local/bin"   # add to ~/.bashrc or ~/.zshrc
+```
+
+### One binary, two behaviors — the executable's name decides
+
+It is all a single executable, but what running it does depends on the file
+name it was started under:
+
+| Invoked as | What a run does |
+|------------|-----------------|
+| `worktrees` / `worktrees.exe` | **Installer only.** `worktrees <dir>` copies the wt files into `<dir>` and prints the finish-setup steps. Run without a path it prints only a short usage message (with the platform's setup remarks) and exits with code 2 — it never opens the TUI and never runs subcommands, whatever the arguments. |
+| `wt`, `wt.bin`, `wt.bin.exe` — any other name | **The actual tool**: full CLI, TUI, `--help`, everything documented below. |
+
+`worktrees <dir>` places in `<dir>` (created if missing, refreshed if present):
+
+- `wt.bin` (`wt.bin.exe` on Windows) — the real binary, a copy of the installer itself;
+- `wt` (POSIX script) or `wt.cmd` (Windows batch) — the entry point you type; it runs the sibling `wt.bin` and performs the cd-on-Enter;
+- deliberately **no `wt.exe`** on Windows — cmd.exe would resolve it before `wt.cmd` and break the cd wrapper.
+
+Setup is therefore always the same two steps: get the `worktrees` binary
+(via `go install` or a build script), then point it at the directory that
+should hold your `wt`:
+
+```sh
+worktrees ~/.local/bin   # any directory you like; put it on PATH
 ```
 
 ### Option A — install from this repository (works today)
@@ -55,15 +89,9 @@ go install .
 worktrees ~/.local/bin   # installs the wt entry points into that directory
 ```
 
-`go install` names the binary `worktrees`. Under that full name the binary
-is purely an installer: `worktrees <dir>` copies the `wt` layout into the
-directory you name (created if missing) — the binary as `wt.bin`
-(`wt.bin.exe` on Windows) plus the `wt` entry point (`wt.cmd` on Windows —
-deliberately no `wt.exe`, which would shadow the wrapper in cmd's lookup) —
-and prints how to finish setting up. Run without a path it only prints that
-usage; the CLI itself answers only to the `wt` names. After a `go install`
-upgrade, run `worktrees <dir>` again to refresh the installed copies.
-Verify, then wire up cd-on-Enter:
+`go install` names the binary `worktrees` — the installer name from the
+table above. After a `go install` upgrade, run `worktrees <dir>` again to
+refresh the installed copies. Verify, then wire up cd-on-Enter:
 
 ```sh
 wt --help
