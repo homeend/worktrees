@@ -43,7 +43,7 @@
 ## Build & Install
 - `./build.sh` / `build.cmd` → `bin/`: real binaries `wt.bin` / `wt.bin.exe` behind entry points `wt` (POSIX script) / `wt.cmd` (batch). The binary is deliberately NOT named `wt.exe`.
 - `./build-worktrees.sh` / `build-worktrees.cmd` → `bin/worktrees[.exe]`: the full-name, self-installing binary.
-- `go install .` installs `worktrees`; under that full name the binary is purely a bootstrapper — it self-installs the wt entry points next to itself and prints setup help only (`cmd/wt/selfinstall.go`); the CLI answers only to the wt names.
+- `go install .` installs `worktrees`; under that full name the binary is purely an installer — `worktrees <dir>` copies the wt entry points into dir, without a path it prints only the usage (`cmd/wt/selfinstall.go`); the CLI answers only to the wt names.
 - Shell integration: `wt shell-init <bash|zsh> [--install]` emits/installs a `wt()` function bound to the binary by absolute path (POSIX builds only; not registered on Windows).
 
 ## Platform Requirements
@@ -85,7 +85,7 @@
 |-----------|----------------|------|
 | `main.go` | Process entry; delegates to `cmd.Execute()` | `main.go` |
 | `cmd.Execute()` | Self-install check, run cobra root, map errors to exit codes | `cmd/wt/root.go` |
-| `runBootstrap()` | When running as `worktrees[.exe]`: materialize wt entry points next to self, print bootstrap help only (never the wt CLI) | `cmd/wt/selfinstall.go` |
+| `runBootstrap()` | When running as `worktrees[.exe]`: install wt entry points into the given path, or print usage — never the wt CLI | `cmd/wt/selfinstall.go` |
 | `rootCmd.RunE` | TTY detection → TUI; afterwards emit Enter-selection (print + `--cd-file`) | `cmd/wt/root.go` |
 | `worktree.Manager` | Domain orchestrator: add/list/remove/kill, derive mode, cwd escape | `pkg/worktree/manager.go` |
 | `pkg/worktree/paths.go` | Normalized path comparisons (Windows-safe) | |

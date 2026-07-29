@@ -37,16 +37,17 @@ checkout:
 ```sh
 cd ~/worktrees     # the directory containing go.mod
 go install .
-worktrees          # self-installs the wt entry points and prints setup steps
+worktrees ~/.local/bin   # installs the wt entry points into that directory
 ```
 
 `go install` names the binary `worktrees`. Under that full name the binary
-is purely a bootstrapper: every run refreshes the `wt` layout next to itself
-in `~/go/bin` — a copy of the binary as `wt.bin` (`wt.bin.exe` on Windows)
-plus the `wt` entry point (`wt.cmd` on Windows — deliberately no `wt.exe`,
-which would shadow the wrapper in cmd's lookup) — and prints how to finish
-setting up, nothing else. The CLI itself answers only to the `wt` names. A
-later `go install` upgrade is picked up the next time you run `worktrees`.
+is purely an installer: `worktrees <dir>` copies the `wt` layout into the
+directory you name (created if missing) — the binary as `wt.bin`
+(`wt.bin.exe` on Windows) plus the `wt` entry point (`wt.cmd` on Windows —
+deliberately no `wt.exe`, which would shadow the wrapper in cmd's lookup) —
+and prints how to finish setting up. Run without a path it only prints that
+usage; the CLI itself answers only to the `wt` names. After a `go install`
+upgrade, run `worktrees <dir>` again to refresh the installed copies.
 Verify, then wire up cd-on-Enter:
 
 ```sh
@@ -83,7 +84,7 @@ go run . --repo /path/to/your/repo new my-feature
 
 ```sh
 # 1. Install (see above)
-cd ~/worktrees && go install . && worktrees   # self-installs wt + prints setup steps
+cd ~/worktrees && go install . && worktrees ~/.local/bin   # installs wt there
 
 # 2. Go to any git repository you want worktrees for
 cd ~/projects/myrepo

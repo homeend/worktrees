@@ -10,12 +10,11 @@ import (
 
 // go install names the binary after the module ("worktrees"), while the repo
 // build scripts produce wt.bin/wt.bin.exe behind wt entry-point wrappers.
-// When the running binary detects it carries the full name, it bootstraps
-// that same layout next to itself: it copies itself as wt.bin[.exe] and
-// writes the platform's wt entry point. `go install .` (or @latest) followed
-// by any `worktrees` invocation therefore yields a working `wt` — and on
-// Windows the binary deliberately never exists as wt.exe, which would shadow
-// the wt.cmd wrapper in cmd's lookup.
+// When the running binary detects it carries the full name, it acts purely
+// as an installer: `worktrees <dir>` copies itself into dir as wt.bin[.exe]
+// and writes the platform's wt entry point there; without a path it prints
+// only the usage. On Windows the binary deliberately never exists as
+// wt.exe, which would shadow the wt.cmd wrapper in cmd's lookup.
 
 // selfInstallPosixScript is the POSIX `wt` entry point (mirrors shell/wt).
 const selfInstallPosixScript = `#!/bin/sh
@@ -66,19 +65,6 @@ func isFullNameInvocation(exe string) bool {
 	return strings.EqualFold(base, "worktrees")
 }
 
-// needsRefresh reports whether dst is missing or older than src.
-func needsRefresh(src, dst string) bool {
-	si, err := os.Stat(src)
-	if err != nil {
-		return false
-	}
-	di, err := os.Stat(dst)
-	if err != nil {
-		return true
-	}
-	return si.ModTime().After(di.ModTime())
-}
-
 // writeFileAtomic writes content via a temp file + rename so a concurrent
 // reader never sees a half-written entry point.
 func writeFileAtomic(path string, content []byte, mode os.FileMode) error {
@@ -107,69 +93,80 @@ func writeFileAtomic(path string, content []byte, mode os.FileMode) error {
 	return nil
 }
 
-// selfInstallAt materializes the wt entry points next to the binary at exe:
-// a copy of the binary as wt.bin[.exe] plus the platform's wt entry-point
-// script. Existing files are refreshed only when the binary is newer (a
-// fresh go install). It reports whether anything was written.
-func selfInstallAt(exe, goos string) (bool, error) {
-	dir := filepath.Dir(exe)
-	changed := false
+// selfInstallTo materializes the wt entry points in dir (created if
+// missing): a copy of the binary at exe as wt.bin[.exe] plus the platform's
+// wt entry-point script. The path was given explicitly, so existing files
+// are always overwritten.
+func selfInstallTo(exe, dir, goos string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
 
 	binName := "wt.bin"
 	if goos == "windows" {
 		binName += ".exe"
 	}
-	binPath := filepath.Join(dir, binName)
-	if needsRefresh(exe, binPath) {
-		data, err := os.ReadFile(exe)
-		if err != nil {
-			return changed, fmt.Errorf("read own binary: %w", err)
-		}
-		if err := writeFileAtomic(binPath, data, 0o755); err != nil {
-			return changed, fmt.Errorf("install %s: %w", binName, err)
-		}
-		changed = true
+	data, err := os.ReadFile(exe)
+	if err != nil {
+		return fmt.Errorf("read own binary: %w", err)
+	}
+	if err := writeFileAtomic(filepath.Join(dir, binName), data, 0o755); err != nil {
+		return fmt.Errorf("install %s: %w", binName, err)
 	}
 
 	if goos == "windows" {
-		script := filepath.Join(dir, "wt.cmd")
-		if needsRefresh(exe, script) {
-			body := strings.ReplaceAll(selfInstallCmdScript, "\n", "\r\n")
-			if err := writeFileAtomic(script, []byte(body), 0o755); err != nil {
-				return changed, fmt.Errorf("install wt.cmd: %w", err)
-			}
-			changed = true
+		body := strings.ReplaceAll(selfInstallCmdScript, "\n", "\r\n")
+		if err := writeFileAtomic(filepath.Join(dir, "wt.cmd"), []byte(body), 0o755); err != nil {
+			return fmt.Errorf("install wt.cmd: %w", err)
 		}
 	} else {
-		script := filepath.Join(dir, "wt")
-		if needsRefresh(exe, script) {
-			if err := writeFileAtomic(script, []byte(selfInstallPosixScript), 0o755); err != nil {
-				return changed, fmt.Errorf("install wt: %w", err)
-			}
-			changed = true
+		if err := writeFileAtomic(filepath.Join(dir, "wt"), []byte(selfInstallPosixScript), 0o755); err != nil {
+			return fmt.Errorf("install wt: %w", err)
 		}
 	}
-	return changed, nil
+	return nil
 }
 
-// exeDirOf returns the directory of exe, splitting on both separators so
-// Windows paths parse in unit tests on any host (exe itself comes from
-// os.Executable at runtime, so this costs nothing there).
-func exeDirOf(exe string) string {
-	if i := strings.LastIndexAny(exe, `/\`); i >= 0 {
-		return exe[:i]
-	}
-	return "."
-}
-
-// bootstrapHelpFor is everything the full-name binary prints: where the wt
-// entry points were materialized and how to finish setting up. The full CLI
-// help deliberately stays behind the wt name — running `worktrees` is a
-// bootstrap step, not a way to drive the tool.
-func bootstrapHelpFor(exe, goos string) string {
-	dir := exeDirOf(exe)
+// bootstrapUsageFor is what the full-name binary prints when no install
+// path is given: worktrees requires the target directory as its one
+// parameter. The full CLI help deliberately stays behind the wt name —
+// running `worktrees` is a bootstrap step, not a way to drive the tool.
+func bootstrapUsageFor(goos string) string {
 	if goos == "windows" {
-		return fmt.Sprintf(`wt entry points are installed in %s:
+		return `worktrees requires the path to install the wt entry points into:
+
+  worktrees C:\tools\wt
+
+That copies into the given directory (created if missing):
+
+  wt.bin.exe   the real binary
+  wt.cmd       entry point — type wt (it also cds into the worktree you pick with Enter)
+
+No wt.exe is ever created: it would shadow wt.cmd in cmd's lookup.
+Afterwards add that directory to your PATH and run wt inside any git repo.
+`
+	}
+	return `worktrees requires the path to install the wt entry points into:
+
+  worktrees ~/.local/bin
+
+That copies into the given directory (created if missing):
+
+  wt.bin   the real binary
+  wt       entry point — run this
+
+Afterwards put that directory on your PATH, then install the shell
+integration for cd-on-Enter:
+
+  wt shell-init zsh --install   (or: bash; then restart your shell)
+`
+}
+
+// installDoneFor is printed after a successful install into dir: how to
+// finish setting up on the given platform.
+func installDoneFor(dir, goos string) string {
+	if goos == "windows" {
+		return fmt.Sprintf(`wt entry points installed in %s:
 
   wt.bin.exe   the real binary
   wt.cmd       entry point — type wt (it also cds into the worktree you pick with Enter)
@@ -182,8 +179,8 @@ To finish setting up:
 For the full command reference run: wt --help
 `, dir, dir)
 	}
-	wtPath := dir + "/wt"
-	return fmt.Sprintf(`wt entry points are installed in %s:
+	wtPath := filepath.Join(dir, "wt")
+	return fmt.Sprintf(`wt entry points installed in %s:
 
   wt.bin   the real binary
   wt       entry point — run this
@@ -200,14 +197,18 @@ For the full command reference run: wt --help
 }
 
 // runBootstrap is the whole program when invoked under the full name
-// ("worktrees"): refresh the wt entry points next to the binary and print
-// the bootstrap help — never the wt CLI.
-func runBootstrap(exe, goos string, out, errOut io.Writer) int {
-	code := 0
-	if _, err := selfInstallAt(exe, goos); err != nil {
-		fmt.Fprintf(errOut, "worktrees: self-install: %v\n", err)
-		code = 1
+// ("worktrees"): with exactly one path argument it installs the wt entry
+// points there; anything else prints the usage — never the wt CLI.
+func runBootstrap(exe string, args []string, goos string, out, errOut io.Writer) int {
+	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
+		fmt.Fprint(errOut, bootstrapUsageFor(goos))
+		return 2
 	}
-	fmt.Fprint(out, bootstrapHelpFor(exe, goos))
-	return code
+	dir := args[0]
+	if err := selfInstallTo(exe, dir, goos); err != nil {
+		fmt.Fprintf(errOut, "worktrees: install: %v\n", err)
+		return 1
+	}
+	fmt.Fprint(out, installDoneFor(dir, goos))
+	return 0
 }

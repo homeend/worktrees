@@ -23,19 +23,17 @@ func TestIsFullNameInvocation(t *testing.T) {
 	}
 }
 
-func TestSelfInstallAt_Posix(t *testing.T) {
-	dir := t.TempDir()
-	exe := filepath.Join(dir, "worktrees")
+func TestSelfInstallTo_Posix(t *testing.T) {
+	src := t.TempDir()
+	exe := filepath.Join(src, "worktrees")
 	if err := os.WriteFile(exe, []byte("BINARY"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// Nested, not-yet-existing target: an explicit install path is created.
+	dir := filepath.Join(t.TempDir(), "tools", "bin")
 
-	changed, err := selfInstallAt(exe, "linux")
-	if err != nil {
-		t.Fatalf("selfInstallAt: %v", err)
-	}
-	if !changed {
-		t.Error("first run should install")
+	if err := selfInstallTo(exe, dir, "linux"); err != nil {
+		t.Fatalf("selfInstallTo: %v", err)
 	}
 	bin, err := os.ReadFile(filepath.Join(dir, "wt.bin"))
 	if err != nil || string(bin) != "BINARY" {
@@ -53,89 +51,111 @@ func TestSelfInstallAt_Posix(t *testing.T) {
 	if sinfo.Mode()&0o111 == 0 {
 		t.Error("wt entry script must be executable")
 	}
-
-	// Idempotent while nothing changed.
-	changed, err = selfInstallAt(exe, "linux")
-	if err != nil || changed {
-		t.Errorf("second run should be a no-op, changed=%v err=%v", changed, err)
+	// The source dir itself gets nothing: install goes only to the target.
+	if _, err := os.Stat(filepath.Join(src, "wt.bin")); err == nil {
+		t.Error("nothing may be installed next to the binary")
 	}
 
-	// A newer binary (fresh go install) refreshes the copies.
+	// An explicit path always overwrites, even a newer stale copy.
+	stale := filepath.Join(dir, "wt.bin")
+	os.WriteFile(stale, []byte("STALE"), 0o755)
 	future := time.Now().Add(time.Hour)
-	os.Chtimes(exe, future, future)
-	changed, err = selfInstallAt(exe, "linux")
-	if err != nil || !changed {
-		t.Errorf("newer binary should refresh, changed=%v err=%v", changed, err)
+	os.Chtimes(stale, future, future)
+	if err := selfInstallTo(exe, dir, "linux"); err != nil {
+		t.Fatalf("selfInstallTo (overwrite): %v", err)
+	}
+	bin, _ = os.ReadFile(stale)
+	if string(bin) != "BINARY" {
+		t.Errorf("explicit install must overwrite, got %q", bin)
 	}
 }
 
-func TestBootstrapHelpFor_Posix(t *testing.T) {
-	help := bootstrapHelpFor("/home/u/go/bin/worktrees", "linux")
-	for _, want := range []string{
-		"/home/u/go/bin",         // where the entry points land
-		"wt.bin",                 // the real binary
-		"shell-init",             // shell integration guidance
-		"--install",
-		"PATH",
-	} {
-		if !strings.Contains(help, want) {
-			t.Errorf("posix bootstrap help missing %q:\n%s", want, help)
+func TestBootstrapUsageFor_Posix(t *testing.T) {
+	usage := bootstrapUsageFor("linux")
+	for _, want := range []string{"path", "wt.bin", "shell-init", "PATH"} {
+		if !strings.Contains(usage, want) {
+			t.Errorf("posix usage missing %q:\n%s", want, usage)
 		}
 	}
-	// Bootstrap help must not be the full CLI help: no subcommand listing.
-	for _, reject := range []string{"kill-em-all", "templates", "Usage:"} {
-		if strings.Contains(help, reject) {
-			t.Errorf("posix bootstrap help must not mention %q:\n%s", reject, help)
+	// Never the full CLI help: no subcommand listing.
+	for _, reject := range []string{"kill-em-all", "Available Commands"} {
+		if strings.Contains(usage, reject) {
+			t.Errorf("posix usage must not mention %q:\n%s", reject, usage)
 		}
 	}
 }
 
-func TestBootstrapHelpFor_Windows(t *testing.T) {
-	help := bootstrapHelpFor(`C:\Users\u\go\bin\worktrees.exe`, "windows")
-	for _, want := range []string{`C:\Users\u\go\bin`, "wt.cmd", "wt.bin.exe", "PATH"} {
-		if !strings.Contains(help, want) {
-			t.Errorf("windows bootstrap help missing %q:\n%s", want, help)
+func TestBootstrapUsageFor_Windows(t *testing.T) {
+	usage := bootstrapUsageFor("windows")
+	for _, want := range []string{"path", "wt.cmd", "wt.bin.exe", "PATH"} {
+		if !strings.Contains(usage, want) {
+			t.Errorf("windows usage missing %q:\n%s", want, usage)
 		}
 	}
-	if strings.Contains(help, "shell-init") {
-		t.Errorf("windows bootstrap help must not mention shell-init (POSIX only):\n%s", help)
+	if strings.Contains(usage, "shell-init") {
+		t.Errorf("windows usage must not mention shell-init (POSIX only):\n%s", usage)
 	}
 }
 
-func TestRunBootstrap_InstallsAndPrintsOnlyBootstrapHelp(t *testing.T) {
-	dir := t.TempDir()
-	exe := filepath.Join(dir, "worktrees")
+func TestRunBootstrap_NoPathShowsUsageAndInstallsNothing(t *testing.T) {
+	src := t.TempDir()
+	exe := filepath.Join(src, "worktrees")
 	if err := os.WriteFile(exe, []byte("BINARY"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	for _, args := range [][]string{nil, {}, {"--help"}, {"-h"}, {"a", "b"}} {
+		var out, errOut strings.Builder
+		code := runBootstrap(exe, args, "linux", &out, &errOut)
+		if code == 0 {
+			t.Errorf("runBootstrap(%v) = 0, want a usage-error exit", args)
+		}
+		if !strings.Contains(errOut.String(), "path") {
+			t.Errorf("runBootstrap(%v) should explain the required path parameter:\n%s", args, errOut.String())
+		}
+		if _, err := os.Stat(filepath.Join(src, "wt.bin")); err == nil {
+			t.Fatalf("runBootstrap(%v) must not install next to the binary", args)
+		}
+	}
+}
+
+func TestRunBootstrap_WithPathInstallsThere(t *testing.T) {
+	src := t.TempDir()
+	exe := filepath.Join(src, "worktrees")
+	if err := os.WriteFile(exe, []byte("BINARY"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "target")
 	var out, errOut strings.Builder
-	code := runBootstrap(exe, "linux", &out, &errOut)
+	code := runBootstrap(exe, []string{dir}, "linux", &out, &errOut)
 	if code != 0 {
 		t.Fatalf("runBootstrap = %d, want 0 (stderr: %s)", code, errOut.String())
 	}
 	if _, err := os.Stat(filepath.Join(dir, "wt.bin")); err != nil {
-		t.Errorf("wt.bin should be installed: %v", err)
+		t.Errorf("wt.bin should be installed in the target dir: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "wt")); err != nil {
-		t.Errorf("wt entry script should be installed: %v", err)
+		t.Errorf("wt entry script should be installed in the target dir: %v", err)
 	}
-	if !strings.Contains(out.String(), "shell-init") {
-		t.Errorf("stdout should carry the bootstrap help:\n%s", out.String())
+	if _, err := os.Stat(filepath.Join(src, "wt.bin")); err == nil {
+		t.Error("nothing may be installed next to the binary")
+	}
+	if !strings.Contains(out.String(), dir) || !strings.Contains(out.String(), "shell-init") {
+		t.Errorf("stdout should confirm the target dir and shell integration steps:\n%s", out.String())
 	}
 	if strings.Contains(out.String(), "kill-em-all") {
 		t.Errorf("stdout must not carry the full CLI help:\n%s", out.String())
 	}
 }
 
-func TestSelfInstallAt_Windows(t *testing.T) {
-	dir := t.TempDir()
-	exe := filepath.Join(dir, "worktrees.exe")
+func TestSelfInstallTo_Windows(t *testing.T) {
+	src := t.TempDir()
+	exe := filepath.Join(src, "worktrees.exe")
 	if err := os.WriteFile(exe, []byte("PE"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := selfInstallAt(exe, "windows")
-	if err != nil || !changed {
-		t.Fatalf("selfInstallAt: changed=%v err=%v", changed, err)
+	dir := filepath.Join(t.TempDir(), "target")
+	if err := selfInstallTo(exe, dir, "windows"); err != nil {
+		t.Fatalf("selfInstallTo: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "wt.bin.exe")); err != nil {
 		t.Errorf("wt.bin.exe should be created: %v", err)
