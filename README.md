@@ -35,12 +35,12 @@ once (it shadows the binary by name and handles the cd):
 eval "$(wt shell-init zsh)"    # or: shell-init bash — add to ~/.zshrc / ~/.bashrc
 ```
 
-> With a brew-installed `wt`, use exactly this eval-from-PATH line — **don't**
-> use `wt shell-init zsh --install` here. `--install` writes the running
-> binary's resolved location into your rc file, which under Homebrew is the
-> version-numbered Cellar path; the next `brew upgrade wt` deletes that
-> directory and the rc line breaks. The eval form re-resolves `wt` from PATH
-> at every shell startup, so upgrades just work.
+> `wt shell-init zsh --install` is also safe under Homebrew: when the running
+> binary resolves to a version-numbered Cellar path, shell-init rewrites it to
+> brew's stable `opt` symlink (`$(brew --prefix)/opt/wt/bin/wt`), which
+> survives `brew upgrade`. (Builds older than this fix wrote the Cellar path
+> into the rc file, which the next upgrade would break — with those, stick to
+> the eval-from-PATH line above.)
 
 ### Go toolchain — the `worktrees` installer
 

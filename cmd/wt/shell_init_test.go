@@ -1,9 +1,61 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// brewLayout builds <root>/Cellar/<formula>/<version>/bin/wt plus the
+// upgrade-stable <root>/opt/<formula>/bin/wt symlink target, mirroring a
+// Homebrew prefix, and returns both paths.
+func brewLayout(t *testing.T, formula, version string) (cellarExe, optExe string) {
+	t.Helper()
+	root := t.TempDir()
+	cellarExe = filepath.Join(root, "Cellar", formula, version, "bin", "wt")
+	optExe = filepath.Join(root, "opt", formula, "bin", "wt")
+	for _, p := range []string{cellarExe, optExe} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("bin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return cellarExe, optExe
+}
+
+func TestStabilizeExePath_RewritesCellarToOpt(t *testing.T) {
+	for _, version := range []string{"1.2.3", "0.5.0_1"} {
+		cellarExe, optExe := brewLayout(t, "wt", version)
+		if got := stabilizeExePath(cellarExe); got != optExe {
+			t.Errorf("stabilizeExePath(%q) = %q, want %q", cellarExe, got, optExe)
+		}
+	}
+}
+
+func TestStabilizeExePath_LeavesNonBrewPathsAlone(t *testing.T) {
+	for _, exe := range []string{
+		"/home/u/go/bin/wt.bin",
+		"/usr/local/bin/wt",
+		"/home/u/Cellar/mytools/bin/wt", // dir named Cellar, but "bin" is no version
+	} {
+		if got := stabilizeExePath(exe); got != exe {
+			t.Errorf("stabilizeExePath(%q) = %q, want unchanged", exe, got)
+		}
+	}
+}
+
+func TestStabilizeExePath_RequiresExistingOptTarget(t *testing.T) {
+	cellarExe, optExe := brewLayout(t, "wt", "1.0.0")
+	if err := os.Remove(optExe); err != nil {
+		t.Fatal(err)
+	}
+	if got := stabilizeExePath(cellarExe); got != cellarExe {
+		t.Errorf("without an opt target the Cellar path must pass through, got %q", got)
+	}
+}
 
 func TestShellInitScript_ZshEmitsFunctionBoundToExe(t *testing.T) {
 	s, err := shellInitScript("zsh", "/opt/tools/bin/wt")

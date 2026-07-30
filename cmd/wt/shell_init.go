@@ -44,6 +44,7 @@ every new machine or user account.`,
 		if err != nil {
 			exe = os.Args[0]
 		}
+		exe = stabilizeExePath(exe)
 		shell := args[0]
 		script, err := shellInitScript(shell, exe)
 		if err != nil {
@@ -81,6 +82,35 @@ func init() {
 	// registered there and never shows up in help.
 	if runtime.GOOS != "windows" {
 		rootCmd.AddCommand(shellInitCmd)
+	}
+}
+
+// stabilizeExePath rewrites a Homebrew Cellar path
+// (…/Cellar/<formula>/<version>/<rest>) to the upgrade-stable opt symlink
+// (…/opt/<formula>/<rest>). os.Executable resolves symlinks on Linux, so a
+// brew-installed wt reports the version-numbered Cellar directory — a path
+// brew deletes on upgrade, which would permanently break an rc line written
+// by --install. The rewrite only fires when the segment after Cellar's
+// formula starts with a digit (brew versions do; ordinary directories that
+// happen to be named Cellar don't) and the opt target actually exists;
+// anything else passes through unchanged.
+func stabilizeExePath(exe string) string {
+	slash := filepath.ToSlash(exe)
+	for from := 0; ; {
+		i := strings.Index(slash[from:], "/Cellar/")
+		if i < 0 {
+			return exe
+		}
+		i += from
+		from = i + len("/Cellar/")
+		parts := strings.SplitN(slash[from:], "/", 3)
+		if len(parts) < 3 || parts[0] == "" || parts[1] == "" || parts[1][0] < '0' || parts[1][0] > '9' {
+			continue
+		}
+		candidate := filepath.FromSlash(slash[:i] + "/opt/" + parts[0] + "/" + parts[2])
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
 	}
 }
 
